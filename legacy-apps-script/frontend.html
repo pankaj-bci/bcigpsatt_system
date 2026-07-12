@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPS Attendance</title>
+<style>
+/* ============================================================
+   BASE RESET & VARIABLES
+============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg      : #0d1117;
+  --card    : #161b22;
+  --panel   : #1c2128;
+  --border  : rgba(255,255,255,.08);
+  --green   : #3fb950;
+  --green-g : rgba(63,185,80,.2);
+  --red     : #f85149;
+  --red-g   : rgba(248,81,73,.2);
+  --amber   : #d29922;
+  --blue    : #388bfd;
+  --purple  : #a371f7;
+  --text    : #e6edf3;
+  --muted   : #7d8590;
+  --r       : 12px;
+}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  min-height:100vh;
+  padding-bottom:80px;
+}
+
+/* ============================================================
+   BOTTOM NAVIGATION BAR
+============================================================ */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--card);
+  border-top:1px solid var(--border);
+  display:flex;
+  z-index:100;
+}
+.nav-btn{
+  flex:1;padding:10px 4px 8px;
+  background:none;border:none;
+  color:var(--muted);
+  font-size:10px;font-weight:600;
+  cursor:pointer;
+  display:flex;flex-direction:column;
+  align-items:center;gap:3px;
+  transition:color .15s;
+  text-transform:uppercase;
+  letter-spacing:.4px;
+}
+.nav-btn .nav-icon{font-size:20px;line-height:1}
+.nav-btn.active{color:var(--blue)}
+.nav-btn.active .nav-icon{filter:drop-shadow(0 0 6px rgba(56,139,253,.5))}
+
+/* ============================================================
+   VIEWS
+============================================================ */
+.view{display:none;padding:16px 14px}
+.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.view-title{font-size:16px;font-weight:700}
+.crd{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;}
+.sec{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
+
+/* Messages */
+.msg{border-radius:10px;padding:11px 14px;font-size:12px;line-height:1.6;display:none;word-break:break-word;white-space:pre-line;margin-bottom:12px}
+.msg.success{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:#7ee787;display:block}
+.msg.error  {background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#ff7b72;display:block}
+.msg.info   {background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:#e3b341;display:block}
+
+/* Form fields */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;padding:9px 12px;background:var(--panel);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:border .15s;font-family:inherit}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue)}
+.field select option{background:var(--card)}
+.field textarea{resize:vertical;min-height:70px}
+.field small{font-size:10px;color:var(--muted);margin-top:4px;display:block}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Primary button */
+.btn-primary{width:100%;background:linear-gradient(135deg,#1f6feb,#388bfd);color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s;margin-top:4px;}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary:hover:not(:disabled){opacity:.88}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-present{background:rgba(63,185,80,.15);color:#7ee787}
+.b-absent{background:rgba(248,81,73,.15);color:#ff7b72}
+.b-unpaid{background:rgba(248,81,73,.25);color:#ff7b72}
+.b-halfday{background:rgba(210,153,34,.15);color:#e3b341}
+.b-leave{background:rgba(56,139,253,.15);color:#79c0ff}
+.b-holiday{background:rgba(163,113,247,.15);color:#c9a4fa}
+.b-sunday{background:rgba(163,113,247,.2);color:#c9a4fa}
+.b-off{background:rgba(125,133,144,.12);color:var(--muted)}
+.b-late{background:rgba(210,153,34,.15);color:#e3b341;font-size:9px;margin-left:2px}
+.b-early{background:rgba(248,81,73,.1);color:#ff7b72;font-size:9px;margin-left:2px}
+.b-pending{background:rgba(210,153,34,.15);color:#e3b341}
+.b-approved{background:rgba(63,185,80,.15);color:#7ee787}
+.b-rejected{background:rgba(248,81,73,.15);color:#ff7b72}
+
+/* Chips */
+.chip{padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid var(--border);background:rgba(255,255,255,.05)}
+.chip.green{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.3);color:var(--green)}
+.chip.blue{background:rgba(56,139,253,.12);border-color:rgba(56,139,253,.3);color:var(--blue)}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);background:var(--card);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{background:var(--panel);padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+tr:last-child td{border:none}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.2);border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px}
+.loading{text-align:center;color:var(--muted);padding:32px;font-size:13px}
+
+/* ============================================================
+   PUNCH SCREEN STYLES
+============================================================ */
+.punch-logo{text-align:center;margin-bottom:16px;padding-top:8px}
+.punch-logo .icon{font-size:40px;display:block;margin-bottom:8px}
+.punch-logo h1{font-size:18px;font-weight:700;letter-spacing:.5px}
+.punch-logo p{font-size:11px;color:var(--muted);margin-top:3px}
+.clock-time{font-size:34px;font-weight:200;letter-spacing:3px;text-align:center}
+.clock-date{font-size:11px;color:var(--muted);text-align:center;margin-bottom:14px}
+.emp-panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:12px;display:none}
+.emp-name{font-size:16px;font-weight:600}
+.emp-email{font-size:11px;color:var(--muted);margin-top:3px}
+.emp-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.loc-notice{background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:11.5px;color:#79c0ff;line-height:1.6;display:none}
+.loc-notice b{display:block;font-size:12px;margin-bottom:3px}
+.gps-bar{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:11.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:#444;flex-shrink:0;transition:all .3s}
+.dot.green{background:var(--green);box-shadow:0 0 6px var(--green-g)}
+.dot.amber{background:var(--amber);box-shadow:0 0 6px rgba(210,153,34,.4)}
+.dot.red{background:var(--red);box-shadow:0 0 6px var(--red-g)}
+.last-punch{text-align:center;font-size:11.5px;color:var(--muted);margin-bottom:14px;min-height:16px}
+.last-punch strong{color:var(--text)}
+.punch-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.btn-in,.btn-out{padding:16px 8px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .18s}
+.btn-in:disabled,.btn-out:disabled{opacity:.35;cursor:not-allowed}
+.btn-in{background:linear-gradient(135deg,#2ea043,#3fb950);color:#0d1117;box-shadow:0 4px 18px var(--green-g)}
+.btn-in:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(63,185,80,.4)}
+.btn-out{background:linear-gradient(135deg,#b91c1c,#f85149);color:#fff;box-shadow:0 4px 18px var(--red-g)}
+.btn-out:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(248,81,73,.4)}
+
+/* ============================================================
+   LOCATION SELECTOR
+============================================================ */
+.loc-selector{margin-bottom:12px;display:none}
+.loc-selector-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.loc-tiles{display:flex;flex-wrap:wrap;gap:8px}
+.loc-tile{flex:1;min-width:calc(50% - 4px);background:var(--panel);border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;transition:all .18s;text-align:left}
+.loc-tile:hover{border-color:rgba(56,139,253,.4);background:rgba(56,139,253,.06)}
+.loc-tile.selected{border-color:var(--blue);background:rgba(56,139,253,.12)}
+.loc-tile-name{font-size:12px;font-weight:700;color:var(--text)}
+.loc-tile-id{font-size:10px;color:var(--muted);margin-top:2px}
+.loc-tile.selected .loc-tile-name{color:var(--blue)}
+
+/* ============================================================
+   DASHBOARD STYLES
+============================================================ */
+.month-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.month-row label{font-size:11px;color:var(--muted)}
+.month-row input{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:12px;outline:none;flex:1}
+.month-label{flex:1;font-size:14px;font-weight:600;color:var(--text)}
+.btn-load{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+/* Skeleton loading placeholders (perceived speed) */
+@keyframes sk-pulse{0%{opacity:.5}50%{opacity:.9}100%{opacity:.5}}
+.sk-tile{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;animation:sk-pulse 1.2s ease-in-out infinite}
+.sk-num{height:20px;width:40%;margin:0 auto 8px;background:var(--panel);border-radius:5px}
+.sk-lbl{height:9px;width:65%;margin:0 auto;background:var(--panel);border-radius:5px}
+.sk-bar{height:38px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;animation:sk-pulse 1.2s ease-in-out infinite}
+.sk-row{height:30px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;animation:sk-pulse 1.2s ease-in-out infinite}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:400px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center}
+.stat-num{font-size:22px;font-weight:700}
+.stat-lbl{font-size:9px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+.stat.s-present .stat-num{color:var(--green)}
+.stat.s-absent  .stat-num{color:var(--red)}
+.stat.s-half    .stat-num{color:var(--amber)}
+.stat.s-late    .stat-num{color:var(--amber)}
+.stat.s-work    .stat-num{color:var(--muted)}
+.stat.s-sunday  .stat-num{color:var(--purple)}
+.allow-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.allow-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:11px}
+.allow-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.allow-lbl{width:130px;font-size:11px;color:var(--muted);flex-shrink:0}
+.allow-track{flex:1;background:var(--panel);border-radius:4px;height:6px;overflow:hidden}
+.allow-fill{height:100%;border-radius:4px;transition:width .6s}
+.fill-ok{background:var(--green)}.fill-warn{background:var(--amber)}.fill-bad{background:var(--red)}
+.allow-count{font-size:11px;color:var(--muted);width:40px;text-align:right;flex-shrink:0}
+.policy-notice{border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:11px;line-height:1.7}
+.notice-p{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.25);color:#ff7b72}
+.notice-f{background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);color:#79c0ff}
+.notice-title{font-weight:700;font-size:12px;display:block;margin-bottom:4px}
+.holiday-pills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.hol-pill{background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);border-radius:20px;padding:3px 10px;font-size:10.5px;color:#c9a4fa}
+.hol-pill span{color:var(--muted);font-size:9.5px;margin-left:3px}
+
+/* ============================================================
+   LEAVE FORM STYLES
+============================================================ */
+.info-box{background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:11.5px;color:#79c0ff;line-height:1.7}
+.info-box b{display:block;font-size:12px;margin-bottom:5px}
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s;position:relative;margin-bottom:4px}
+.upload-zone:hover{border-color:var(--blue)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:26px;margin-bottom:5px}
+.upload-text{font-size:11.5px;color:var(--muted)}
+.upload-name{font-size:11px;color:var(--green);margin-top:5px}
+.leave-history-table{margin-top:4px}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     VIEW 1 — PUNCH SCREEN
+============================================================ -->
+<div class="view active" id="view-punch">
+  <div class="punch-logo">
+    <span class="icon">📍</span>
+    <h1>GPS ATTENDANCE</h1>
+    <p>Location-verified punch system</p>
+  </div>
+
+  <div class="clock-time" id="clockTime">--:--:--</div>
+  <div class="clock-date" id="clockDate"></div>
+
+  <div class="emp-panel" id="empPanel">
+    <div class="emp-name" id="empName">Loading...</div>
+    <div class="emp-email" id="empEmail"></div>
+    <div class="emp-chips">
+      <span class="chip green" id="empType">Fixed</span>
+      <span class="chip blue"  id="empLoc">Location</span>
+    </div>
+  </div>
+
+  <div class="loc-notice" id="locNotice">
+    <b>📌 Location Rules</b>
+    <span id="noticeText"></span>
+  </div>
+
+  <div class="loc-selector" id="locSelector">
+    <div class="loc-selector-label">Select Your Current Location *</div>
+    <div class="loc-tiles" id="locTiles">
+      <div class="loading" style="font-size:12px">Loading locations...</div>
+    </div>
+  </div>
+
+  <div class="gps-bar">
+    <div class="dot" id="gpsDot"></div>
+    <span id="gpsText">Waiting for GPS signal...</span>
+  </div>
+
+  <div class="last-punch" id="lastPunch">Checking last punch...</div>
+  <div class="msg" id="punchMsg"></div>
+
+  <div class="punch-row">
+    <button class="btn-in"  id="btnIn"  onclick="doPunch('IN')"  disabled>✅ PUNCH IN</button>
+    <button class="btn-out" id="btnOut" onclick="doPunch('OUT')" disabled>🚪 PUNCH OUT</button>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     VIEW 2 — EMPLOYEE DASHBOARD
+============================================================ -->
+<div class="view" id="view-dashboard">
+  <div class="view-header">
+    <div class="view-title">📊 My Attendance</div>
+  </div>
+  <div class="month-row">
+    <span class="month-label">📅 <span id="dashMonthLabel">This Month</span></span>
+    <button class="btn-load" onclick="loadDashboard()">🔄 Refresh</button>
+  </div>
+  <div id="dashContent">
+    <div class="loading">Loading your attendance…</div>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     VIEW 3 — LEAVE FORM
+============================================================ -->
+<div class="view" id="view-leave">
+  <div class="view-header">
+    <div class="view-title">📋 Apply for Leave</div>
+  </div>
+
+  <div class="info-box">
+    <b>ℹ️ Important — Read First</b>
+    This form informs admin about your planned absence in advance.<br>
+    ✅ Submit BEFORE your leave date to keep admin informed.<br>
+    ✅ Upload screenshot of approval from AJ Mam / RJ Sir.<br>
+    ⚠️ This does NOT change salary deductions — those are based on
+    your punch records and monthly allowances only.
+  </div>
+
+  <div class="msg" id="leaveMsg"></div>
+
+  <div class="field field-row">
+    <div><label>Leave From *</label><input type="date" id="lv_from"></div>
+    <div><label>Leave To *</label><input type="date" id="lv_to"></div>
+  </div>
+  <div class="field field-row">
+    <div><label>Request Type *</label><select id="lv_type"><option value="">Select...</option></select></div>
+    <div><label>Reason *</label><select id="lv_reason"><option value="">Select...</option></select></div>
+  </div>
+  <div class="field">
+    <label>Approved By *</label>
+    <select id="lv_approver"><option value="">Select approver...</option></select>
+    <small>The person who approved your leave verbally or on WhatsApp</small>
+  </div>
+  <div class="field">
+    <label>Upload Approval Screenshot</label>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="proofFile" accept="image/*" onchange="handleFile(this)">
+      <div class="upload-icon">📷</div>
+      <div class="upload-text">Tap to upload screenshot of approval message</div>
+      <div class="upload-name" id="fileName"></div>
+    </div>
+    <small>If upload not available, describe the approval below</small>
+  </div>
+  <div class="field">
+    <label>Approval Description (if no screenshot)</label>
+    <textarea id="lv_desc" placeholder="e.g. AJ Mam approved on WhatsApp on 14 Mar at 10:30 AM"></textarea>
+  </div>
+  <button class="btn-primary" id="submitLeaveBtn" onclick="submitLeave()">Submit Leave Request</button>
+
+  <div class="sec" style="margin-top:24px">My Leave Requests</div>
+  <div id="myLeaveHistory"><div class="loading">Loading...</div></div>
+</div>
+
+
+<!-- ============================================================
+     BOTTOM NAVIGATION
+============================================================ -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" id="nav-punch"     onclick="switchView('punch')">
+    <span class="nav-icon">📍</span>Punch
+  </button>
+  <button class="nav-btn"        id="nav-dashboard" onclick="switchView('dashboard')">
+    <span class="nav-icon">📊</span>Dashboard
+  </button>
+  <button class="nav-btn"        id="nav-leave"     onclick="switchView('leave')">
+    <span class="nav-icon">📋</span>Leave
+  </button>
+</nav>
+
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
+<script>
+
+// ── State ──────────────────────────────────────────────────────────────────
+var gps              = null;
+var employeeInfo     = null;
+var proofBase64      = '';
+var proofFileName    = '';
+var allLocations     = [];
+var selectedLocationId = null;
+var DAYS             = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// ── On load ────────────────────────────────────────────────────────────────
+// doGet() already verified this user is a registered employee.
+// Just load their info and start GPS.
+window.onload = function() {
+  startClock();
+  setDefaultMonth();
+  loadUserInfo();
+  loadLocations();
+  loadLeaveFormConfig();
+};
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    var n = new Date();
+    document.getElementById('clockTime').textContent = n.toLocaleTimeString('en-IN');
+    document.getElementById('clockDate').textContent = n.toLocaleDateString('en-IN', {
+      weekday:'long', year:'numeric', month:'long', day:'numeric'
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── View switching ─────────────────────────────────────────────────────────
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+  document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'leave')     loadMyLeaveHistory();
+}
+
+// ── Load user info ─────────────────────────────────────────────────────────
+// doGet() already confirmed this user is a registered employee.
+// We just fetch their details to populate the UI.
+function loadUserInfo() {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.success || !r.employee) {
+        showPunchMsg('error', 'Your email is not registered. Contact admin.');
+        return;
+      }
+      employeeInfo = r.employee;
+      var e = r.employee;
+      document.getElementById('empPanel').style.display = 'block';
+      document.getElementById('empName').textContent    = 'Welcome, ' + e.name;
+      document.getElementById('empEmail').textContent   = r.email;
+      document.getElementById('empType').textContent    = e.employee_type || 'Fixed';
+      document.getElementById('empLoc').textContent     = '📌 Select Location';
+
+      document.getElementById('locNotice').style.display = 'block';
+      document.getElementById('noticeText').innerHTML =
+        'Select your current location below, then punch IN or OUT.';
+
+      startGPS();
+      loadLastPunch();
+    })
+    .withFailureHandler(function(e) {
+      showPunchMsg('error', 'Error loading profile: ' + e.message);
+    })
+    .Server_getUserInfo();
+}
+
+// ── Load last punch ────────────────────────────────────────────────────────
+function loadLastPunch() {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      var el = document.getElementById('lastPunch');
+      if (r.success && r.lastAction) {
+        el.innerHTML = 'Last: <strong>' + r.lastAction + '</strong> at <strong>' + r.lastTime + '</strong>';
+      } else {
+        el.textContent = 'No punch recorded yet.';
+      }
+    })
+    .Server_getMyLastPunch();
+}
+
+// ── GPS ────────────────────────────────────────────────────────────────────
+function startGPS() {
+  if (!navigator.geolocation) { setGPS('red', 'GPS not supported on this device.'); return; }
+  setGPS('amber', 'Acquiring GPS signal...');
+  navigator.geolocation.watchPosition(
+    function(pos) {
+      gps = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      var a = Math.round(pos.coords.accuracy);
+      setGPS(a <= 50 ? 'green' : 'amber',
+             a <= 50 ? 'GPS ready — ' + a + 'm accuracy' : 'Low accuracy: ' + a + 'm — move to open area');
+      _updateBtnsState();
+    },
+    function(err) {
+      var m = 'GPS error.';
+      if (err.code === 1) m = 'GPS denied — allow location access.';
+      if (err.code === 2) m = 'GPS unavailable. Move to open area.';
+      if (err.code === 3) m = 'GPS timed out. Trying again...';
+      setGPS('red', m);
+      setBtns(false);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 8000 }
+  );
+}
+
+// ── Punch ──────────────────────────────────────────────────────────────────
+function doPunch(action, _retry) {
+  if (!gps) { showPunchMsg('error', 'GPS not ready. Please wait or move to open area.'); return; }
+  if (!selectedLocationId) { showPunchMsg('error', 'Please select your current location first.'); return; }
+  _retry = _retry || 0;
+  setBtns(false);
+  showPunchMsg('info', '<span class="spin"></span>' +
+    (_retry > 0 ? 'Retrying… (' + _retry + '/3)' : 'Verifying location…'));
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r.success) {
+        setBtns(true);
+        showPunchMsg('success', r.message);
+        setTimeout(loadLastPunch, 600);
+      } else if (r.message && r.message.indexOf('busy') !== -1 && _retry < 3) {
+        // Silent auto-retry on peak-hour busy — staff never see the raw error
+        setTimeout(function() { doPunch(action, _retry + 1); }, 2500 + _retry * 500);
+      } else {
+        setBtns(true);
+        showPunchMsg('error', r.message);
+      }
+    })
+    .withFailureHandler(function(e) { setBtns(true); showPunchMsg('error', 'Server error: ' + e.message); })
+    .Server_recordPunch(action, gps.lat, gps.lon, gps.acc, selectedLocationId);
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+// Current month string "yyyy-MM" — staff only ever see the current month.
+function currentMonthStr() {
+  var n = new Date();
+  return n.getFullYear() + '-' + (n.getMonth() < 9 ? '0' : '') + (n.getMonth() + 1);
+}
+
+function setDefaultMonth() {
+  var n = new Date();
+  var label = n.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  var el = document.getElementById('dashMonthLabel');
+  if (el) el.textContent = label;
+}
+
+// Skeleton placeholder shown instantly while real data loads (perceived speed)
+function dashSkeleton() {
+  var tiles = '';
+  for (var i = 0; i < 9; i++) {
+    tiles += '<div class="sk-tile"><div class="sk-num"></div><div class="sk-lbl"></div></div>';
+  }
+  return '<div class="stats-grid">' + tiles + '</div>' +
+         '<div class="sk-bar"></div><div class="sk-bar" style="width:70%"></div>' +
+         '<div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>';
+}
+
+function loadDashboard() {
+  var mon = currentMonthStr(); // always current month — old months not shown
+  document.getElementById('dashContent').innerHTML = dashSkeleton();
+  google.script.run
+    .withSuccessHandler(renderDashboard)
+    .withFailureHandler(function(e) {
+      document.getElementById('dashContent').innerHTML =
+        '<div class="loading" style="color:#ff7b72">Error: ' + e.message + '</div>';
+    })
+    .Server_getMyDashboard(mon);
+}
+
+function renderDashboard(r) {
+  if (!r.success) {
+    document.getElementById('dashContent').innerHTML =
+      '<div class="loading" style="color:#ff7b72">' + (r.message || r.error) + '</div>';
+    return;
+  }
+  var emp = r.employee, m = r.monthly || {}, daily = r.daily || [];
+  var holidays = r.holidayList || [], wdays = r.workingDays || 0;
+  var isProbation = emp.employee_type === 'Probation';
+  var leUsed = m.late_early_used || 0;
+  var crUsed = parseFloat(m.leave_credits_used) || 0;
+  var attendPct = wdays > 0 ? Math.round(((m.total_present || 0) / wdays) * 100) : 0;
+  var mon = r.currentMonth;
+  var html = '';
+
+  if (isProbation) {
+    html += '<div class="policy-notice notice-p"><span class="notice-title">\u26a0\ufe0f Probation \u2014 Zero Tolerance</span>IN \u2264 9:36 AM \u00b7 OUT \u2265 6:30 PM \u00b7 Either violation = Half Day \u00b7 No free allowances</div>';
+  } else {
+    html += '<div class="policy-notice notice-f"><span class="notice-title">\ud83d\udccb Fixed Employee Allowances</span>3 late/early free \u00b7 1 leave credit (1 full leave OR 2 half days) \u00b7 Absent uses 1 credit \u00b7 Leave form = info only</div>';
+  }
+
+  // Points card
+  var pts = calcPoints(daily, mon);
+  var ptsColor = pts.deductions === 0 ? 'var(--green)' : (pts.deductions <= 1 ? 'var(--amber)' : 'var(--red)');
+  html += '<div class="crd" style="text-align:center;padding:20px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Points \u2014 ' + mon + '</div>';
+  if (daily.length === 0) {
+    html += '<div style="font-size:15px;color:var(--muted);padding:6px 0">\u2014</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px">No attendance recorded yet</div>';
+  } else {
+    html += '<div style="line-height:1"><span style="font-size:42px;font-weight:800;color:' + ptsColor + '">' + pts.earned + '</span>' +
+      '<span style="font-size:15px;color:var(--muted);font-weight:400"> / ' + pts.total + '</span></div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:8px">' +
+        (pts.deductions > 0 ? '\u2212' + pts.deductions + ' points deducted (unpaid absences / penalty half days)' : '\u2705 No deductions this month') +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--muted);margin-top:3px">Total = Working days + Sundays + Holidays (' + pts.total + ' days this month)</div>';
+  }
+  html += '</div>';
+
+  var extraDays = parseFloat(r.extraDaysYear) || 0;
+  var yearLbl   = r.currentYear || (r.currentMonth ? r.currentMonth.substring(0,4) : '');
+
+  // Count "Punch In Only" days from the daily records (computed client-side).
+  // These are days the employee punched IN but never OUT — NOT counted as
+  // working days for salary. Shown so the employee knows to inform admin.
+  var punchInOnly = 0;
+  daily.forEach(function(d) { if (d.status === 'Punch In Only') punchInOnly++; });
+
+  html += '<div class="stats-grid">' +
+    stat(wdays, 'Working', 's-work') +
+    stat(m.total_present||0, 'Present', 's-present') +
+    stat(m.total_absent||0, 'Absent', 's-absent') +
+    stat(m.total_half_days||0, 'Half Day', 's-half') +
+    stat(m.total_late||0, 'Late IN', 's-late') +
+    stat(m.total_early||0, 'Early OUT', 's-late') +
+    stat(m.total_working_sundays||0, 'Sun Work', 's-sunday') +
+    stat(extraDays, '\ud83c\udf81 Extra Days ' + yearLbl, 's-sunday') +
+    stat(punchInOnly, '\u26a0\ufe0f In, No Out', 's-late') +
+    stat(attendPct+'%', 'Attend.', 's-present') +
+    '</div>';
+
+  if (punchInOnly > 0) {
+    html += '<div class="policy-notice notice-p" style="margin-top:0">' +
+      '<span class="notice-title">\u26a0\ufe0f ' + punchInOnly + ' day(s) with Punch IN but no Punch OUT</span>' +
+      'These days are NOT counted as working days. Please inform admin if you actually worked these days.</div>';
+  }
+
+  if (!isProbation) {
+    var lePct = Math.min((leUsed/3)*100, 120);
+    var crPct = Math.min((crUsed/1)*100, 120);
+    var leCol = leUsed < 3   ? 'fill-ok' : leUsed === 3   ? 'fill-warn' : 'fill-bad';
+    var crCol = crUsed < 0.5 ? 'fill-ok' : crUsed < 1     ? 'fill-warn' : 'fill-bad';
+    var unpaids = m.total_unpaid_absent || 0;
+    html += '<div class="allow-card"><div class="allow-title">Monthly Allowances — ' + mon + '</div>' +
+      allowRow('Late/Early free (3)', leUsed, 3, lePct, leCol) +
+      allowRow('Leave credit (1)', crUsed, 1, crPct, crCol) +
+      (unpaids > 0 ? '<div style="color:#ff7b72;font-size:11px;margin-top:6px">⚠️ ' + unpaids + ' Unpaid Absent — no credit left</div>' : '') +
+      '</div>';
+  }
+
+  var mHols = holidays.filter(function(h) { return h.date && h.date.indexOf(mon) === 0; });
+  if (mHols.length) {
+    html += '<div class="sec">Holidays this month</div><div class="holiday-pills">';
+    mHols.forEach(function(h) { html += '<div class="hol-pill">' + h.holiday_name + '<span>' + fmtD(h.date) + '</span></div>'; });
+    html += '</div>';
+  }
+
+  html += '<div class="sec">Daily Log — ' + mon + '</div>';
+  if (!daily.length) {
+    html += '<div class="crd" style="text-align:center;color:var(--muted);font-size:12px">No records yet for this month.</div>';
+  } else {
+    html += '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Status</th><th>IN</th><th>OUT</th><th>Notes</th></tr></thead><tbody>';
+    daily.forEach(function(d) {
+      var bc  = statusBadge(d.status);
+      var day = DAYS[new Date(d.date + 'T00:00:00').getDay()] || '';
+      var fl  = '';
+      if (d.late_flag)      fl += '<span class="badge b-late">LATE</span>';
+      if (d.early_flag)     fl += '<span class="badge b-early">EARLY</span>';
+      if (d.working_sunday || d.status === 'Working Holiday')
+                            fl += '<span class="badge b-sunday" style="font-size:9px">☀</span>';
+      var cr = d.leave_credit_used > 0
+        ? '<span style="color:#ff7b72;font-size:10px"> −' + d.leave_credit_used + '</span>' : '';
+
+      // Render IN/OUT cells:
+      //   • Holiday with NO punch → show holiday name (from notes "Public Holiday: <name>")
+      //   • Weekly Off (no punch) → show "☀ Off"
+      //   • Otherwise → real punch times or "—"
+      var inCell, outCell;
+      if (d.status === 'Holiday' && !d.in_time && !d.out_time) {
+        var hName = (d.notes || '').replace(/^Public Holiday:\s*/i, '') || 'Holiday';
+        inCell = outCell = '<span style="color:#a371f7">\ud83c\udf89 ' + hName + '</span>';
+      } else if (d.status === 'Weekly Off') {
+        inCell = outCell = '<span style="color:var(--muted)">\u2600 Off</span>';
+      } else {
+        inCell  = d.in_time  || '—';
+        outCell = d.out_time || '—';
+      }
+
+      html += '<tr><td>' + fmtD(d.date) + '</td><td style="color:var(--muted)">' + day + '</td>' +
+        '<td><span class="badge ' + bc + '">' + d.status + '</span>' + fl + '</td>' +
+        '<td>' + inCell + '</td><td>' + outCell + '</td>' +
+        '<td style="color:var(--muted);font-size:10.5px">' + (d.notes || '') + cr + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  document.getElementById('dashContent').innerHTML = html;
+}
+
+// ── Leave form ─────────────────────────────────────────────────────────────
+function loadLeaveFormConfig() {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.success) return;
+      populate('lv_type',     r.types);
+      populate('lv_reason',   r.reasons);
+      populate('lv_approver', r.approvers);
+    })
+    .Server_getLeaveFormConfig();
+
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('lv_from').min = today;
+  document.getElementById('lv_to').min   = today;
+  document.getElementById('lv_from').addEventListener('change', function() {
+    document.getElementById('lv_to').min = this.value;
+  });
+}
+
+function populate(selectId, items) {
+  var sel = document.getElementById(selectId);
+  while (sel.options.length > 1) sel.remove(1);
+  items.forEach(function(item) {
+    var opt = document.createElement('option');
+    opt.value = item; opt.textContent = item;
+    sel.appendChild(opt);
+  });
+}
+
+function handleFile(input) {
+  var file = input.files[0]; if (!file) return;
+  proofFileName = file.name;
+  document.getElementById('fileName').textContent = '\u2713 ' + file.name;
+  var reader = new FileReader();
+  reader.onload = function(e) { proofBase64 = e.target.result; };
+  reader.readAsDataURL(file);
+}
+
+function submitLeave() {
+  var from     = document.getElementById('lv_from').value;
+  var to       = document.getElementById('lv_to').value;
+  var type     = document.getElementById('lv_type').value;
+  var reason   = document.getElementById('lv_reason').value;
+  var approver = document.getElementById('lv_approver').value;
+  var desc     = document.getElementById('lv_desc').value.trim();
+
+  if (!from||!to||!type||!reason||!approver) { showLeaveMsg('error','Please fill all required fields (marked *).'); return; }
+  if (new Date(to) < new Date(from)) { showLeaveMsg('error','"Leave To" cannot be before "Leave From".'); return; }
+  if (!proofBase64 && !desc) { showLeaveMsg('error','Please upload a screenshot or provide a description.'); return; }
+
+  var btn = document.getElementById('submitLeaveBtn');
+  btn.disabled = true;
+  showLeaveMsg('info', '<span class="spin"></span>Submitting...');
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false;
+      if (r.success) {
+        showLeaveMsg('success', '\u2705 Leave request submitted!\nRequest ID: ' + r.request_id + '\nAdmin will be notified.');
+        ['lv_from','lv_to','lv_desc'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('lv_type').selectedIndex    = 0;
+        document.getElementById('lv_reason').selectedIndex  = 0;
+        document.getElementById('lv_approver').selectedIndex = 0;
+        document.getElementById('fileName').textContent = '';
+        proofBase64 = ''; proofFileName = '';
+        loadMyLeaveHistory();
+      } else { showLeaveMsg('error', '\u274c ' + r.message); }
+    })
+    .withFailureHandler(function(e) { btn.disabled = false; showLeaveMsg('error', 'Server error: ' + e.message); })
+    .Server_submitLeave(
+      { leave_from:from, leave_to:to, request_type:type, reason:reason, approved_by:approver, proof_description:desc },
+      proofBase64 || null, proofFileName || null
+    );
+}
+
+function loadMyLeaveHistory() {
+  var el = document.getElementById('myLeaveHistory');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.success || !r.data || !r.data.length) { el.innerHTML = '<div class="loading">No leave requests yet.</div>'; return; }
+      var html = '<div class="tbl-wrap leave-history-table"><table><thead><tr><th>From</th><th>To</th><th>Type</th><th>Reason</th><th>Status</th><th>Proof</th></tr></thead><tbody>';
+      r.data.forEach(function(l) {
+        var sc = l.status === 'Approved' ? 'b-approved' : l.status === 'Rejected' ? 'b-rejected' : 'b-pending';
+        var proof = l.proof_link
+          ? '<a href="' + l.proof_link + '" target="_blank" style="color:var(--blue);font-size:10.5px">View</a>' : '\u2014';
+        html += '<tr><td>' + fmtD(l.leave_from) + '</td><td>' + fmtD(l.leave_to) + '</td>' +
+          '<td>' + l.request_type + '</td><td>' + l.reason + '</td>' +
+          '<td><span class="badge ' + sc + '">' + l.status + '</span></td><td>' + proof + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      el.innerHTML = html;
+    })
+    .withFailureHandler(function(e) { el.innerHTML = '<div class="loading" style="color:#ff7b72">Error: ' + e.message + '</div>'; })
+    .Server_getMyLeaveRequests();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function setGPS(c,t) { document.getElementById('gpsDot').className='dot '+c; document.getElementById('gpsText').textContent=t; }
+
+// setBtns(false) = force-disable during a pending server call
+// setBtns(true)  = re-evaluate readiness (GPS + location both needed)
+function setBtns(on) {
+  if (!on) {
+    document.getElementById('btnIn').disabled  = true;
+    document.getElementById('btnOut').disabled = true;
+  } else {
+    _updateBtnsState();
+  }
+}
+function _updateBtnsState() {
+  var ready = !!gps && !!selectedLocationId;
+  document.getElementById('btnIn').disabled  = !ready;
+  document.getElementById('btnOut').disabled = !ready;
+}
+
+function showPunchMsg(t,h) { var b=document.getElementById('punchMsg'); b.className='msg '+t; b.innerHTML=h; }
+function showLeaveMsg(t,h) { var b=document.getElementById('leaveMsg'); b.className='msg '+t; b.innerHTML=h; }
+
+// ── Load all locations ─────────────────────────────────────────────────────
+function loadLocations() {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      var tilesEl = document.getElementById('locTiles');
+      if (!r.success || !r.data || !r.data.length) {
+        tilesEl.innerHTML = '<div style="color:var(--red);font-size:12px">⚠️ No locations found. Contact admin.</div>';
+        document.getElementById('locSelector').style.display = 'block';
+        return;
+      }
+      allLocations = r.data;
+      var html = '';
+      r.data.forEach(function(loc) {
+        html += '<div class="loc-tile" data-loc-id="' + loc.location_id + '"' +
+                ' onclick="selectLocation(\'' + loc.location_id + '\')">' +
+                '<div class="loc-tile-name">📍 ' + loc.location_name + '</div>' +
+                '<div class="loc-tile-id">' + loc.location_id + '</div>' +
+                '</div>';
+      });
+      // WFH and Other are virtual tiles — no fixed GPS, inverted distance check
+      html += '<div class="loc-tile" data-loc-id="WFH"' +
+              ' onclick="selectLocation(\'WFH\')">' +
+              '<div class="loc-tile-name">🏠 Work From Home</div>' +
+              '<div class="loc-tile-id">Valid if &gt;5 km from office</div>' +
+              '</div>';
+      html += '<div class="loc-tile" data-loc-id="OTHER"' +
+              ' onclick="selectLocation(\'OTHER\')">' +
+              '<div class="loc-tile-name">🌍 Other / Field Visit</div>' +
+              '<div class="loc-tile-id">Valid if &gt;2 km from office</div>' +
+              '</div>';
+      tilesEl.innerHTML = html;
+      document.getElementById('locSelector').style.display = 'block';
+      // Auto-select if only one DB location exists (WFH/Other don't count here)
+      if (r.data.length === 1) selectLocation(r.data[0].location_id);
+    })
+    .withFailureHandler(function() {
+      document.getElementById('locTiles').innerHTML =
+        '<div style="color:var(--red);font-size:12px">⚠️ Error loading locations.</div>';
+      document.getElementById('locSelector').style.display = 'block';
+    })
+    .Server_getAllLocations();
+}
+
+// ── Select a location tile ─────────────────────────────────────────────────
+function selectLocation(id) {
+  selectedLocationId = id;
+  document.querySelectorAll('.loc-tile').forEach(function(t) {
+    t.classList.toggle('selected', t.getAttribute('data-loc-id') === id);
+  });
+
+  var noticeHtml = '';
+  if (id === 'WFH') {
+    document.getElementById('empLoc').textContent = '🏠 Work From Home';
+    noticeHtml = '<b>Selected:</b> Work From Home<br>' +
+      '<b>Valid if:</b> you are more than 5 km from the office.<br>' +
+      '<b>Supports:</b> both Punch IN and Punch OUT.';
+  } else if (id === 'OTHER') {
+    document.getElementById('empLoc').textContent = '🌍 Other';
+    noticeHtml = '<b>Selected:</b> Other / Field Visit<br>' +
+      '<b>Valid if:</b> you are more than 2 km from the office.<br>' +
+      '<b>Supports:</b> both Punch IN and Punch OUT.';
+  } else {
+    var loc = null;
+    for (var i = 0; i < allLocations.length; i++) {
+      if (allLocations[i].location_id === id) { loc = allLocations[i]; break; }
+    }
+    if (loc) {
+      document.getElementById('empLoc').textContent = '📌 ' + loc.location_name;
+      noticeHtml = '<b>Selected:</b> ' + loc.location_name + ' (' + loc.location_id + ')<br>' +
+        '<b>Punch IN:</b> GPS must match this location.<br>' +
+        '<b>Punch OUT:</b> This location or main office.';
+    }
+  }
+  document.getElementById('noticeText').innerHTML = noticeHtml;
+  _updateBtnsState();
+}
+
+function stat(num,lbl,cls) {
+  return '<div class="stat '+cls+'"><div class="stat-num">'+num+'</div><div class="stat-lbl">'+lbl+'</div></div>';
+}
+function allowRow(lbl,used,max,pct,col) {
+  return '<div class="allow-row"><span class="allow-lbl">'+lbl+'</span>' +
+    '<div class="allow-track"><div class="allow-fill '+col+'" style="width:'+pct+'%"></div></div>' +
+    '<span class="allow-count">'+used+' / '+max+'</span></div>';
+}
+function fmtD(s) {
+  if (!s) return '—';
+  try { return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}); } catch(e) { return s; }
+}
+function statusBadge(s) {
+  var m = {'Present':'b-present','Absent':'b-absent','Unpaid Absent':'b-unpaid',
+    'Half Day':'b-halfday','Working Sunday':'b-sunday','Working Holiday':'b-sunday',
+    'Punch In Only':'b-late',
+    'Holiday':'b-holiday','Weekly Off':'b-off'};
+  return m[s] || 'b-off';
+}
+
+function calcPoints(daily, monthStr) {
+  var parts    = monthStr.split('-');
+  var total    = new Date(parseInt(parts[0]), parseInt(parts[1]), 0).getDate();
+  var deductions = 0;
+  daily.forEach(function(d) {
+    if (d.status === 'Unpaid Absent') deductions += 1;
+    else if (d.status === 'Half Day' && !(parseFloat(d.leave_credit_used) > 0)) deductions += 0.5;
+  });
+  return { total: total, deductions: deductions, earned: total - deductions };
+}
+
+</script>
+</body>
+</html>

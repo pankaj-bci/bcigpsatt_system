@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--navy:#0d1117;--blue:#1f6feb;--bluel:#388bfd;--bg:#f6f8fa;--surf:#fff;
+  --bdr:#d0d7de;--text:#1f2328;--muted:#636e7b;
+  --green:#1a7f37;--gbg:#dafbe1;--gbdr:#aee6b4;
+  --red:#cf222e;--rbg:#ffebe9;--rbdr:#f5c6c8;
+  --amber:#9a6700;--abg:#fff8c5;--abdr:#d4a72c;
+  --purple:#6e40c9;--pbg:#f1effe;--r:8px;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+
+.topbar{background:var(--navy);color:#e6edf3;padding:13px 20px;display:flex;
+  align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:15px;font-weight:700}
+.topbar .meta{font-size:11px;color:#7d8590}
+
+.tab-nav{background:var(--surf);border-bottom:1px solid var(--bdr);padding:0 18px;
+  display:flex;overflow-x:auto;gap:2px}
+.tb{padding:10px 14px;border:none;background:transparent;cursor:pointer;font-size:12px;
+  font-weight:600;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tb:hover{color:var(--text)}
+.tb.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+.content{padding:18px;max-width:1100px;margin:0 auto}
+.section{display:none}.section.active{display:block}
+.pg-title{font-size:16px;font-weight:700;margin-bottom:3px}
+.pg-sub{font-size:11.5px;color:var(--muted);margin-bottom:16px}
+
+/* Filter bar */
+.fbar{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:12px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.fbar label{display:block;font-size:10px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.fbar select,.fbar input{background:var(--bg);border:1px solid var(--bdr);border-radius:6px;
+  padding:6px 9px;font-size:12px;color:var(--text);outline:none;min-width:130px}
+.btn-f{background:var(--blue);color:#fff;border:none;border-radius:6px;
+  padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+.sc{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;text-align:center}
+.sc-num{font-size:22px;font-weight:700;color:var(--blue)}
+.sc-lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+
+/* Today live dashboard tiles */
+.today-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.ttile{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:16px 14px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.ttile:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.ttile.active-tile{outline:2px solid var(--blue);outline-offset:1px}
+.ttile-num{font-size:30px;font-weight:800;line-height:1}
+.ttile-lbl{font-size:11px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.ttile-hint{font-size:9px;color:var(--muted);margin-top:3px;opacity:.7}
+
+/* Cards */
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+.ch{padding:11px 14px;border-bottom:1px solid var(--bdr);font-size:13px;font-weight:700;
+  display:flex;align-items:center;justify-content:space-between}
+
+/* Tables */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--bg);padding:8px 11px;text-align:left;font-weight:700;font-size:10px;
+  text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+td{padding:8px 11px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:last-child td{border:none}
+tr:hover td{background:#fafbff}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-active{background:var(--gbg);color:var(--green)}
+.b-inactive{background:var(--rbg);color:var(--red)}
+.b-fixed{background:#ddf4ff;color:#0969da}
+.b-prob{background:var(--abg);color:var(--amber)}
+.b-present{background:var(--gbg);color:var(--green)}
+.b-absent{background:var(--rbg);color:var(--red)}
+.b-unpaid{background:#ffd7d7;color:#a40000;border:1px solid #f5c6c8}
+.b-halfday{background:var(--abg);color:var(--amber)}
+.b-leave{background:#ddf4ff;color:#0969da}
+.b-off{background:#f0f0f0;color:var(--muted)}
+.b-holiday{background:var(--pbg);color:var(--purple)}
+.b-sunday{background:var(--pbg);color:var(--purple)}
+.b-late{background:var(--abg);color:var(--amber);font-size:9px}
+.b-early{background:#fff0ee;color:#c04040;font-size:9px}
+.b-pending{background:var(--abg);color:var(--amber)}
+.b-approved{background:var(--gbg);color:var(--green)}
+.b-rejected{background:var(--rbg);color:var(--red)}
+
+/* Buttons */
+.btn-sm{padding:3px 8px;border-radius:5px;border:1px solid;background:transparent;cursor:pointer;font-size:11px;font-weight:600}
+.bg{color:var(--green);border-color:var(--green)}.bg:hover{background:var(--gbg)}
+.br{color:var(--red);border-color:var(--red)}.br:hover{background:var(--rbg)}
+.bb{color:var(--blue);border-color:var(--blue)}.bb:hover{background:#ddf4ff}
+.btn-p{background:var(--blue);color:#fff;border:none;padding:8px 18px;border-radius:6px;
+  font-size:12px;font-weight:700;cursor:pointer;margin-top:10px}
+.btn-p:hover{background:var(--bluel)}
+
+/* Forms */
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
+.fg input,.fg select{width:100%;padding:7px 10px;border:1px solid var(--bdr);border-radius:6px;
+  font-size:12px;color:var(--text);background:var(--bg);outline:none}
+.fg input:focus,.fg select:focus{border-color:var(--bluel)}
+.fg small{font-size:10px;color:var(--muted);margin-top:3px;display:block}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.form-grid{grid-template-columns:1fr}}
+.ff{grid-column:1/-1}
+
+/* Alerts */
+.alert{border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:10px;display:none}
+.alert.success{background:var(--gbg);color:var(--green);border:1px solid var(--gbdr);display:block}
+.alert.error  {background:var(--rbg);color:var(--red);border:1px solid var(--rbdr);display:block}
+
+.empty{text-align:center;color:var(--muted);padding:24px;font-size:12px}
+.proof-link{color:var(--blue);text-decoration:none;font-size:11px}
+
+/* Info banner */
+.info-banner{background:var(--abg);border:1px solid var(--abdr);border-radius:6px;
+  padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:var(--amber)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>📊 GPS ATTENDANCE — ADMIN</h1>
+  <div class="meta" id="adminMeta">Loading...</div>
+</div>
+
+<div class="tab-nav">
+  <button class="tb active" onclick="showTab('today',this)">📡 Today</button>
+  <button class="tb"        onclick="showTab('reports',this)">📊 Reports</button>
+  <button class="tb"        onclick="showTab('leaves',this)">📋 Leave Requests</button>
+  <button class="tb"        onclick="showTab('logs',this)">🕐 Punch Logs</button>
+  <button class="tb"        onclick="showTab('employees',this)">👥 Employees</button>
+  <button class="tb"        onclick="showTab('addEmp',this)">➕ Add Employee</button>
+  <button class="tb"        onclick="showTab('addLoc',this)">📍 Add Location</button>
+  <button class="tb"        onclick="showTab('holidays',this)">🎉 Holidays</button>
+</div>
+
+<div class="content">
+
+<!-- ═══════ TODAY (LIVE DASHBOARD) ═══════ -->
+<div class="section active" id="tab-today">
+  <div class="pg-title">📡 Today's Live Status
+    <span id="todayDate" style="font-size:13px;color:var(--muted);font-weight:400"></span>
+  </div>
+  <div class="pg-sub">
+    Live snapshot of attendance right now.
+    <span id="todayAsOf" style="color:var(--blue)"></span>
+    <button class="btn-sm bb" style="margin-left:8px" onclick="loadToday()">🔄 Refresh</button>
+    <span id="todayAuto" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+  </div>
+
+  <div id="todayOffBanner" class="info-banner" style="display:none"></div>
+
+  <div id="todayTiles" class="today-grid">
+    <div class="empty" style="padding:20px">Loading live status…</div>
+  </div>
+
+  <!-- Expandable name list panel -->
+  <div id="todayDetail" class="card" style="display:none;margin-top:14px">
+    <div class="ch"><span id="todayDetailTitle">Details</span>
+      <button class="btn-sm bb" onclick="closeTodayDetail()" style="float:right">✕ Close</button>
+    </div>
+    <div id="todayDetailBody" style="padding:12px;line-height:2"></div>
+  </div>
+</div>
+
+<!-- ═══════ REPORTS ═══════ -->
+<div class="section" id="tab-reports">
+  <div class="pg-title">Attendance Reports</div>
+  <div class="pg-sub">Filter by employee and/or month. Working days = total days − Sundays − holidays.</div>
+
+  <div class="info-banner">
+    ℹ️ <b>Leave form is information only.</b> Salary is based on punch data + allowances only.
+    Absent with credit = Absent (1 credit deducted). Absent without credit = Unpaid Absent.
+  </div>
+
+  <div class="fbar">
+    <div><label>Employee</label><select id="rpt_emp"><option value="">All Employees</option></select></div>
+    <div><label>Month</label><input type="month" id="rpt_month"></div>
+    <div style="margin-bottom:0"><button class="btn-f" onclick="loadReport()">Load Report</button></div>
+  </div>
+
+  <div id="reportStats" class="stats-row" style="display:none"></div>
+  <div id="reportContent"></div>
+</div>
+
+<!-- ═══════ LEAVE REQUESTS ═══════ -->
+<div class="section" id="tab-leaves">
+  <div class="pg-title">Leave Requests</div>
+  <div class="pg-sub">These are information submissions. Approving/rejecting here does NOT affect salary.</div>
+
+  <div class="info-banner">
+    ℹ️ Leave requests are submitted so admin knows in advance about planned absences.
+    Salary deductions happen automatically based on punch records + allowances only.
+  </div>
+
+  <div class="fbar">
+    <div><label>Employee</label><select id="lr_emp"><option value="">All</option></select></div>
+    <div><label>Status</label>
+      <select id="lr_status">
+        <option value="">All</option>
+        <option value="Pending">Pending</option>
+        <option value="Approved">Approved</option>
+        <option value="Rejected">Rejected</option>
+      </select></div>
+    <div><label>Scope</label>
+      <select id="lr_scope">
+        <option value="today">Today only</option>
+        <option value="all">All requests</option>
+      </select></div>
+    <div style="margin-bottom:0"><button class="btn-f" onclick="loadLeaves()">Load</button></div>
+  </div>
+
+  <div class="card">
+    <div class="ch">Leave Requests</div>
+    <div class="tw"><table>
+      <thead><tr><th>Emp</th><th>Name</th><th>From</th><th>To</th><th>Type</th>
+        <th>Reason</th><th>By</th><th>Proof</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody id="leaveTbody"><tr><td colspan="10" class="empty">Click Load to view.</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ═══════ PUNCH LOGS ═══════ -->
+<div class="section" id="tab-logs">
+  <div class="pg-title">Punch Logs</div>
+  <div class="pg-sub">Today's GPS-verified punch records by default.</div>
+  <div class="card">
+    <div class="ch">
+      <span id="logsTitle">Today's Logs</span>
+      <button class="btn-sm bb" onclick="loadLogs()" style="margin-left:8px">🔄 Refresh</button>
+      <button class="btn-sm bb" id="logsToggle" onclick="toggleLogsScope()" style="margin-left:4px">Show All</button>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>Name</th><th>Action</th><th>Date &amp; Time</th><th>Location</th></tr></thead>
+      <tbody id="logsTbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ═══════ EMPLOYEES ═══════ -->
+<div class="section" id="tab-employees">
+  <div class="pg-title">Employee Management</div>
+  <div class="pg-sub">Edit type, location, status. Changes take effect on next punch.</div>
+  <div class="card">
+    <div class="ch">All Employees <button class="btn-sm bb" onclick="loadEmployees()">Refresh</button></div>
+    <div class="tw"><table>
+      <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Type</th><th>Default Loc</th><th>Shift</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="empTbody"><tr><td colspan="8" class="empty">Click Refresh.</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ═══════ ADD EMPLOYEE ═══════ -->
+<div class="section" id="tab-addEmp">
+  <div class="pg-title">Add New Employee</div>
+  <div class="pg-sub">Gmail must match exactly what they use to log in.</div>
+  <div class="card"><div style="padding:18px">
+    <div class="alert" id="empAlert"></div>
+    <div class="form-grid">
+      <div class="fg"><label>Employee ID *</label><input id="f_id" placeholder="E101"><small>Used in all reports</small></div>
+      <div class="fg"><label>Full Name *</label><input id="f_name" placeholder="Rahul Sharma"></div>
+      <div class="fg ff"><label>Google Email *</label><input type="email" id="f_email" placeholder="rahul@gmail.com"><small>Exact Gmail — one wrong character = cannot log in</small></div>
+      <div class="fg"><label>Employee Type *</label>
+        <select id="f_type"><option value="Fixed">Fixed</option><option value="Probation">Probation</option></select>
+        <small>Probation = zero tolerance, no free allowances</small></div>
+      <div class="fg"><label>Default Location <span style="font-weight:400;color:var(--muted)">(Optional)</span></label>
+        <select id="f_loc"><option value="">— No preference —</option></select>
+        <small>Staff now select their location at punch time — this is optional</small></div>
+      <div class="fg"><label>Shift Start</label><input type="time" id="f_shift" value="09:30"></div>
+      <div class="fg"><label>Status</label>
+        <select id="f_status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+    </div>
+    <button class="btn-p" onclick="addEmployee()">Add Employee</button>
+  </div></div>
+</div>
+
+<!-- ═══════ ADD LOCATION ═══════ -->
+<div class="section" id="tab-addLoc">
+  <div class="pg-title">Add New Location</div>
+  <div class="pg-sub">Office, workshop, client site, etc.</div>
+  <div class="card"><div style="padding:18px">
+    <div style="background:var(--abg);border:1px solid var(--abdr);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--amber);">
+      💡 Get GPS coordinates: Google Maps → right-click exact location → copy coordinates shown.<br>
+      First number = Latitude. Second = Longitude. <b>L1 (office) is already saved.</b>
+    </div>
+    <div class="alert" id="locAlert"></div>
+    <div class="form-grid">
+      <div class="fg"><label>Location ID *</label><input id="l_id" placeholder="L2"><small>L1 = default office</small></div>
+      <div class="fg"><label>Location Name *</label><input id="l_name" placeholder="Workshop Venue A"></div>
+      <div class="fg"><label>Latitude *</label><input type="number" id="l_lat" placeholder="28.4932" step="any"></div>
+      <div class="fg"><label>Longitude *</label><input type="number" id="l_lon" placeholder="77.3035" step="any"></div>
+      <div class="fg"><label>Radius (metres)</label><input type="number" id="l_rad" value="100" min="10"><small>Recommended: 100–200m</small></div>
+    </div>
+    <button class="btn-p" onclick="addLocation()">Add Location</button>
+  </div></div>
+</div>
+
+<!-- ═══════ HOLIDAYS ═══════ (NEW) -->
+<div class="section" id="tab-holidays">
+  <div class="pg-title">Holiday Management</div>
+  <div class="pg-sub">Add public holidays. These days are excluded from working-day count and marked as "Holiday" — not absent.</div>
+
+  <div class="card"><div style="padding:18px">
+    <div class="alert" id="holAlert"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg" style="flex:1;min-width:160px;margin-bottom:0">
+        <label>Holiday Date *</label>
+        <input type="date" id="h_date">
+      </div>
+      <div class="fg" style="flex:2;min-width:200px;margin-bottom:0">
+        <label>Holiday Name *</label>
+        <input type="text" id="h_name" placeholder="e.g. Republic Day, Holi, Diwali">
+      </div>
+      <div style="margin-bottom:0">
+        <button class="btn-p" style="margin-top:0;padding:8px 16px" onclick="addHoliday()">Add Holiday</button>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="card">
+    <div class="ch">Holiday List — Current Year <button class="btn-sm bb" onclick="loadHolidays()">Refresh</button></div>
+    <div class="tw"><table>
+      <thead><tr><th>Date</th><th>Day</th><th>Holiday Name</th><th>Action</th></tr></thead>
+      <tbody id="holTbody"><tr><td colspan="4" class="empty">Click Refresh to load.</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div style="background:var(--abg);border:1px solid var(--abdr);border-radius:6px;padding:12px 14px;font-size:12px;color:var(--amber);">
+    <b>📌 How Holidays Work:</b><br>
+    • Holidays are excluded from working-day count for attendance percentage.<br>
+    • If an employee has no punch on a holiday → marked as <b>Holiday</b> (not Absent).<br>
+    • If an employee punches on a holiday → marked as <b>Present</b> (they chose to work).<br>
+    • Add all holidays for this year at the start of the year.
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<!-- Edit Employee Modal -->
+<div id="editModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:20px;width:90%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:14px">Edit Employee — <span id="modal_eid"></span></div>
+    <div class="fg"><label>Employee Type</label>
+      <select id="modal_type"><option value="Fixed">Fixed</option><option value="Probation">Probation</option></select></div>
+    <div class="fg" style="margin-top:10px"><label>Default Location <span style="font-weight:400;color:var(--muted)">(Optional)</span></label>
+      <select id="modal_loc"><option value="">— No preference —</option></select></div>
+    <div class="fg" style="margin-top:10px"><label>Status</label>
+      <select id="modal_st"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn-sm br" onclick="closeEdit()">Cancel</button>
+      <button class="btn-p" style="margin-top:0" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var _emps=[], _locs=[], _editId='';
+var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+window.onload=function(){
+  google.script.run.withSuccessHandler(function(r){
+    if(r.success) document.getElementById('adminMeta').textContent='Admin: '+r.email;
+  }).Server_getUserInfo();
+  var now=new Date();
+  document.getElementById('rpt_month').value=now.getFullYear()+'-'+(now.getMonth()<9?'0':'')+(now.getMonth()+1);
+  loadDropdowns();
+  // Today is the default active tab — load it live + start auto-refresh
+  loadToday();
+  startTodayAuto();
+};
+
+function showTab(id,btn){
+  document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active');});
+  document.querySelectorAll('.tb').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+
+  // Start/stop the Today auto-refresh depending on which tab is open
+  if(id==='today'){ loadToday(); startTodayAuto(); } else { stopTodayAuto(); }
+
+  if(id==='employees') loadEmployees();
+  if(id==='logs')      loadLogs();
+  if(id==='leaves')    loadLeaves();
+  if(id==='holidays')  loadHolidays();
+}
+
+// ── TODAY LIVE DASHBOARD ─────────────────────────────────────────────────────
+var _todayTimer=null;
+var _todayData=null;
+
+// Tile definitions: key → {label, color, hint}
+var TODAY_TILES=[
+  {key:'total_staff',  label:'Total Staff',  color:'#636e7b', hint:'all active'},
+  {key:'present',      label:'Present',      color:'#1a7f37', hint:'punched in'},
+  {key:'yet_to_punch', label:'Yet to Punch', color:'#9a6700', hint:'before grace'},
+  {key:'absent',       label:'Absent',       color:'#cf222e', hint:'past grace, no punch'},
+  {key:'late',         label:'Late',         color:'#c04040', hint:'in after 9:36'},
+  {key:'on_leave',     label:'On Leave',     color:'#6e40c9', hint:'approved/pending'},
+  {key:'in_office',    label:'In Office',    color:'#1f6feb', hint:'head office'},
+  {key:'in_workshop',  label:'In Workshop',  color:'#bf8700', hint:'workshop location'},
+  {key:'in_wfh',       label:'WFH',          color:'#2da44e', hint:'work from home'},
+  {key:'in_other',     label:'Other',        color:'#6e7681', hint:'field visit'}
+];
+
+function loadToday(){
+  var grid=document.getElementById('todayTiles');
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.success){
+      grid.innerHTML='<div class="empty" style="padding:20px">⚠️ '+((r&&r.message)||'Failed to load')+'</div>';
+      return;
+    }
+    _todayData=r;
+    document.getElementById('todayDate').textContent=' — '+r.date;
+    document.getElementById('todayAsOf').textContent='As of '+r.asOf;
+
+    // Off-day banner
+    var ob=document.getElementById('todayOffBanner');
+    if(r.isOffDay){
+      ob.style.display='block';
+      ob.innerHTML='🎉 Today is a '+r.offReason+'. Staff are not marked absent today.';
+    } else { ob.style.display='none'; }
+
+    // Render tiles
+    grid.innerHTML=TODAY_TILES.map(function(t){
+      var tile=r.tiles[t.key]||{count:0,names:[]};
+      return '<div class="ttile" onclick="showTodayDetail(\''+t.key+'\')">'+
+        '<div class="ttile-num" style="color:'+t.color+'">'+tile.count+'</div>'+
+        '<div class="ttile-lbl">'+t.label+'</div>'+
+        '<div class="ttile-hint">'+t.hint+'</div>'+
+        '</div>';
+    }).join('');
+
+    // If a detail panel was open, refresh its contents
+    if(_openTileKey) showTodayDetail(_openTileKey,true);
+  }).Server_getTodayDashboard();
+}
+
+var _openTileKey=null;
+function showTodayDetail(key,keepOpen){
+  if(!_todayData) return;
+  var def=null;
+  for(var i=0;i<TODAY_TILES.length;i++){ if(TODAY_TILES[i].key===key) def=TODAY_TILES[i]; }
+  var tile=_todayData.tiles[key]||{count:0,names:[]};
+  _openTileKey=key;
+
+  // highlight selected tile
+  var tiles=document.querySelectorAll('.ttile');
+  tiles.forEach(function(el){ el.classList.remove('active-tile'); });
+  for(var j=0;j<TODAY_TILES.length;j++){
+    if(TODAY_TILES[j].key===key && tiles[j]) tiles[j].classList.add('active-tile');
+  }
+
+  document.getElementById('todayDetailTitle').textContent=def.label+' — '+tile.count;
+  var body=document.getElementById('todayDetailBody');
+  if(!tile.names.length){
+    body.innerHTML='<span class="empty">Nobody in this category right now.</span>';
+  } else {
+    body.innerHTML=tile.names.map(function(n,i){
+      return '<span style="display:inline-block;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:4px 10px;margin:3px;font-size:13px">'+(i+1)+'. '+n+'</span>';
+    }).join('');
+  }
+  document.getElementById('todayDetail').style.display='block';
+}
+
+function closeTodayDetail(){
+  document.getElementById('todayDetail').style.display='none';
+  _openTileKey=null;
+  document.querySelectorAll('.ttile').forEach(function(el){ el.classList.remove('active-tile'); });
+}
+
+function startTodayAuto(){
+  stopTodayAuto();
+  _todayTimer=setInterval(loadToday, 5*60*1000); // every 5 minutes
+  document.getElementById('todayAuto').textContent='· auto-refresh every 5 min';
+}
+function stopTodayAuto(){
+  if(_todayTimer){ clearInterval(_todayTimer); _todayTimer=null; }
+}
+
+function loadDropdowns(){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r.success)return;
+    _locs=r.data;
+    var noPreference='<option value="">— No preference —</option>';
+    var opts=noPreference+r.data.map(function(l){return'<option value="'+l.location_id+'">'+l.location_id+' — '+l.location_name+'</option>';}).join('');
+    document.getElementById('f_loc').innerHTML=opts||noPreference;
+    document.getElementById('modal_loc').innerHTML=opts||noPreference;
+  }).Server_getAllLocations();
+
+  google.script.run.withSuccessHandler(function(r){
+    if(!r.success)return;
+    _emps=r.data;
+    var opts='<option value="">All Employees</option>'+r.data.map(function(e){return'<option value="'+e.emp_id+'">'+e.emp_id+' — '+e.name+'</option>';}).join('');
+    document.getElementById('rpt_emp').innerHTML=opts;
+    document.getElementById('lr_emp').innerHTML=opts;
+  }).Server_getAllEmployees();
+}
+
+// ── REPORTS ───────────────────────────────────────────────────────────────
+function loadReport(){
+  var empId=v('rpt_emp'), mon=v('rpt_month');
+  if(!mon){alert('Select a month.');return;}
+  document.getElementById('reportStats').style.display='none';
+  document.getElementById('reportContent').innerHTML='<div class="empty">Loading...</div>';
+
+  google.script.run.withSuccessHandler(function(r){
+    if(!r.success){document.getElementById('reportContent').innerHTML='<div class="empty" style="color:red;">'+r.message+'</div>';return;}
+    renderReport(r);
+  }).Server_getAdminReport(empId||null, mon);
+}
+
+function renderReport(r){
+  var monthly=r.monthly||[], daily=r.daily||[], wdays=r.workingDays||0;
+  var extraMap=r.extraDaysMap||{}, year=r.year||(r.month?r.month.substring(0,4):'');
+
+  // Count "Punch In Only" days per employee from the daily records (client-side).
+  // These are days with IN but no OUT — NOT counted as working days for salary.
+  var pioMap={}, pioDates={};
+  daily.forEach(function(d){
+    if(d.status==='Punch In Only'){
+      pioMap[d.emp_id]=(pioMap[d.emp_id]||0)+1;
+      if(!pioDates[d.emp_id]) pioDates[d.emp_id]=[];
+      pioDates[d.emp_id].push(d.date);
+    }
+  });
+
+  // Points map: group daily by emp_id and compute earned/total points per employee
+  var dailyByEmp={};
+  daily.forEach(function(d){ if(!dailyByEmp[d.emp_id]) dailyByEmp[d.emp_id]=[]; dailyByEmp[d.emp_id].push(d); });
+  var pointsMap={};
+  monthly.forEach(function(m){ pointsMap[m.emp_id]=calcPoints(dailyByEmp[m.emp_id]||[], r.month); });
+
+  var totP=0,totA=0,totH=0,totUA=0,totL=0,totLate=0,totEarly=0,totSun=0,totExtra=0,totPIO=0,totPtsEarned=0,totPtsTotal=0;
+  monthly.forEach(function(m){
+    totP+=m.total_present; totA+=m.total_absent; totH+=m.total_half_days;
+    totUA+=m.total_unpaid_absent; totL+=m.total_leaves_used;
+    totLate+=m.total_late; totEarly+=m.total_early; totSun+=m.total_working_sundays;
+    totExtra+=(parseFloat(extraMap[m.emp_id])||0);
+    totPIO+=(pioMap[m.emp_id]||0);
+    if(pointsMap[m.emp_id]){ totPtsEarned+=pointsMap[m.emp_id].earned; totPtsTotal+=pointsMap[m.emp_id].total; }
+  });
+
+  var st=document.getElementById('reportStats');
+  st.style.display='grid';
+  st.innerHTML=
+    sc2(totPtsEarned+' / '+totPtsTotal,'Total Points','#1f6feb')+
+    sc2(wdays,'Working Days','#636e7b')+
+    sc2(totP,'Present','#1a7f37')+
+    sc2(totA,'Absent','#cf222e')+
+    sc2(totUA,'Unpaid Absent','#a40000')+
+    sc2(totH,'Half Days','#9a6700')+
+    sc2(totLate,'Late IN','#9a6700')+
+    sc2(totEarly,'Early OUT','#c04040')+
+    sc2(totSun,'Working Sundays','#6e40c9')+
+    sc2(totExtra,'\ud83c\udf81 Extra Days '+year,'#6e40c9')+
+    sc2(totPIO,'\u26a0\ufe0f In, No Out','#c04040');
+
+  // Monthly summary table
+  // ── Points Overview card (all-employee mode only) ───────────────────────
+  var html = '';
+  if (!v('rpt_emp') && monthly.length > 0) {
+    var sortedM = monthly.slice().sort(function(a,b){
+      return (pointsMap[b.emp_id]||{earned:0}).earned - (pointsMap[a.emp_id]||{earned:0}).earned;
+    });
+    html += '<div class="card" style="margin-bottom:14px">' +
+      '<div class="ch">🏅 Points Summary — '+r.month+
+      ' <span style="font-size:11px;color:var(--muted);font-weight:400">('+monthly.length+' employees — sorted by points)</span></div>' +
+      '<div class="tw"><table>' +
+      '<thead><tr><th>#</th><th>Name</th><th>Type</th><th>Points Earned / Total</th><th>Deductions</th><th>Status</th></tr></thead><tbody>';
+    sortedM.forEach(function(m,i){
+      var emp=getEmp(m.emp_id);
+      var pts=pointsMap[m.emp_id]||{earned:0,total:0,deductions:0};
+      var tb=emp&&emp.employee_type==='Probation'?'b-prob':'b-fixed';
+      var ptsClr=pts.deductions>0?'color:#cf222e;font-weight:800':'color:#1a7f37;font-weight:800';
+      var verdict=pts.deductions===0
+        ?'<span style="color:#1a7f37;font-weight:700">✅ Full Points</span>'
+        :pts.deductions<=1
+          ?'<span style="color:#9a6700;font-weight:700">⚠️ −'+pts.deductions+' pts</span>'
+          :'<span style="color:#cf222e;font-weight:700">❌ −'+pts.deductions+' pts</span>';
+      html+='<tr>'+
+        '<td style="color:var(--muted);font-weight:600">'+(i+1)+'</td>'+
+        '<td><b>'+(emp?emp.name:m.emp_id)+'</b></td>'+
+        '<td>'+(emp?'<span class="badge '+tb+'">'+emp.employee_type+'</span>':'—')+'</td>'+
+        '<td style="'+ptsClr+'">'+pts.earned+' / '+pts.total+'</td>'+
+        '<td>'+(pts.deductions>0?'<span style="color:#cf222e">−'+pts.deductions+'</span>':'<span style="color:var(--muted)">—</span>')+'</td>'+
+        '<td>'+verdict+'</td>'+
+        '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // ── Monthly detail table ─────────────────────────────────────────────────
+  html += '<div class="card"><div class="ch">Monthly Summary — '+r.month+
+    (wdays?' <span style="font-size:11px;color:var(--muted);font-weight:400">('+wdays+' working days)</span>':'')+
+    '</div><div class="tw"><table>'+
+    '<thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Points</th><th>Working Days</th><th>Present</th>'+
+    '<th>Absent</th><th>Unpaid Absent</th><th>Half Days</th><th>Late</th><th>Early</th>'+
+    '<th>Working Sundays</th><th>Late/Early Used</th><th>Credits Used</th><th>Extra Days ('+year+')</th><th>In, No Out</th></tr></thead><tbody>';
+
+  if(monthly.length===0){
+    html+='<tr><td colspan="16" class="empty">No data. Click Load Report.</td></tr>';
+  } else {
+    monthly.forEach(function(m){
+      var emp=getEmp(m.emp_id);
+      var tb=emp&&emp.employee_type==='Probation'?'b-prob':'b-fixed';
+      var uaStyle=m.total_unpaid_absent>0?'style="color:#a40000;font-weight:700"':'';
+      var leStyle=m.late_early_used>3?'style="color:#cf222e;font-weight:700"':'';
+      var crStyle=m.leave_credits_used>=1?'style="color:#cf222e;font-weight:700"':'';
+      var ed=(parseFloat(extraMap[m.emp_id])||0);
+      var edStyle=ed>0?'style="color:#6e40c9;font-weight:700"':'';
+      var pio=(pioMap[m.emp_id]||0);
+      var pioStyle=pio>0?'style="color:#c04040;font-weight:700" title="'+(pioDates[m.emp_id]||[]).join(', ')+'"':'';
+      var pts=pointsMap[m.emp_id]||{earned:'—',total:'—',deductions:0};
+      var ptsStyle=pts.deductions>0?'style="color:#cf222e;font-weight:700"':'style="color:#1a7f37;font-weight:700"';
+      html+='<tr>'+
+        '<td><b>'+m.emp_id+'</b></td>'+
+        '<td>'+(emp?emp.name:'—')+'</td>'+
+        '<td>'+(emp?'<span class="badge '+tb+'">'+emp.employee_type+'</span>':'—')+'</td>'+
+        '<td '+ptsStyle+'>'+pts.earned+' / '+pts.total+'</td>'+
+        '<td>'+m.working_days+'</td>'+
+        '<td>'+m.total_present+'</td>'+
+        '<td>'+m.total_absent+'</td>'+
+        '<td '+uaStyle+'>'+m.total_unpaid_absent+'</td>'+
+        '<td>'+m.total_half_days+'</td>'+
+        '<td>'+m.total_late+'</td>'+
+        '<td>'+m.total_early+'</td>'+
+        '<td>'+m.total_working_sundays+'</td>'+
+        '<td '+leStyle+'>'+m.late_early_used+' / 3</td>'+
+        '<td '+crStyle+'>'+m.leave_credits_used+' / 1</td>'+
+        '<td '+edStyle+'>'+ed+'</td>'+
+        '<td '+pioStyle+'>'+pio+'</td>'+
+        '</tr>';
+    });
+  }
+  html+='</tbody></table></div></div>';
+
+  // Daily log (only if filtering by single employee)
+  if(v('rpt_emp') && daily.length>0){
+    html+='<div class="card"><div class="ch">Daily Log — '+v('rpt_emp')+'</div><div class="tw"><table>'+
+      '<thead><tr><th>Date</th><th>Day</th><th>Status</th><th>IN</th><th>OUT</th><th>Flags</th><th>Credit Used</th><th>Notes</th></tr></thead><tbody>';
+    daily.forEach(function(d){
+      var bc=statusBadge(d.status);
+      var day=DAYS[new Date(d.date+'T00:00:00').getDay()]||'';
+      var flags='';
+      if(d.late_flag)    flags+='<span class="badge b-late">LATE</span> ';
+      if(d.early_flag)   flags+='<span class="badge b-early">EARLY</span> ';
+      if(d.half_day_flag)flags+='<span class="badge b-halfday" style="font-size:9px">HD</span> ';
+      if(d.working_sunday)flags+='<span class="badge b-sunday" style="font-size:9px">☀ SUN</span> ';
+      if(d.status==='Working Holiday')flags+='<span class="badge b-sunday" style="font-size:9px">🎁 WH</span> ';
+      var cr=d.leave_credit_used>0?'<span style="color:#cf222e">−'+d.leave_credit_used+'</span>':'0';
+
+      // Holiday with no punch → show holiday name in IN/OUT cells
+      // Weekly Off with no punch → show "Off" indicator
+      var inC, outC;
+      if(d.status==='Holiday' && !d.in_time && !d.out_time){
+        var hName=(d.notes||'').replace(/^Public Holiday:\s*/i,'')||'Holiday';
+        inC=outC='<span style="color:#6e40c9">🎉 '+hName+'</span>';
+      } else if(d.status==='Weekly Off'){
+        inC=outC='<span style="color:var(--muted)">☀ Off</span>';
+      } else {
+        inC=d.in_time||'—';
+        outC=d.out_time||'—';
+      }
+
+      html+='<tr>'+
+        '<td>'+d.date+'</td>'+
+        '<td style="color:var(--muted)">'+day+'</td>'+
+        '<td><span class="badge '+bc+'">'+d.status+'</span></td>'+
+        '<td>'+inC+'</td>'+
+        '<td>'+outC+'</td>'+
+        '<td>'+flags+'</td>'+
+        '<td>'+cr+'</td>'+
+        '<td style="color:var(--muted);font-size:11px">'+(d.notes||'')+'</td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+  }
+
+  document.getElementById('reportContent').innerHTML=html;
+}
+
+function sc2(n,l,c){return'<div class="sc"><div class="sc-num" style="color:'+c+'">'+n+'</div><div class="sc-lbl">'+l+'</div></div>';}
+
+// ── LEAVE REQUESTS ────────────────────────────────────────────────────────
+function loadLeaves(){
+  var empId=v('lr_emp'), status=v('lr_status'), scope=v('lr_scope');
+  var tbody=document.getElementById('leaveTbody');
+  tbody.innerHTML='<tr><td colspan="10" class="empty">Loading…</td></tr>';
+  var render=function(r){
+    if(!r.success||!r.data.length){tbody.innerHTML='<tr><td colspan="10" class="empty">No requests found.</td></tr>';return;}
+    tbody.innerHTML=r.data.map(function(l){
+      var sc='b-pending';
+      if(l.status==='Approved')sc='b-approved';
+      if(l.status==='Rejected')sc='b-rejected';
+      var proof=l.proof_link?'<a class="proof-link" href="'+l.proof_link+'" target="_blank">View</a>':'—';
+      var actions=l.status==='Pending'?
+        '<button class="btn-sm bg" onclick="leaveAct(\''+l.request_id+'\',\'Approved\')">Acknowledge</button> '+
+        '<button class="btn-sm br" onclick="leaveAct(\''+l.request_id+'\',\'Rejected\')">Reject</button>':'';
+      return'<tr><td><b>'+l.emp_id+'</b></td><td>'+l.name+'</td>'+
+        '<td>'+fmtD(l.leave_from)+'</td><td>'+fmtD(l.leave_to)+'</td>'+
+        '<td>'+l.request_type+'</td><td>'+l.reason+'</td><td>'+l.approved_by+'</td>'+
+        '<td>'+proof+'</td>'+
+        '<td><span class="badge '+sc+'">'+l.status+'</span></td>'+
+        '<td>'+actions+'</td></tr>';
+    }).join('');
+  };
+  if(scope==='today'){
+    // Today-scoped fast read (Approved + Pending covering today). Apply client filters.
+    google.script.run.withSuccessHandler(function(r){
+      if(r.success&&r.data){
+        r.data=r.data.filter(function(l){
+          if(empId  && l.emp_id!==empId) return false;
+          if(status && l.status!==status) return false;
+          return true;
+        });
+      }
+      render(r);
+    }).Server_getTodayLeaveRequests();
+  } else {
+    google.script.run.withSuccessHandler(render).Server_getAllLeaveRequests(empId||null, status||null);
+  }
+}
+
+function leaveAct(id,status){
+  var note=status==='Rejected'?prompt('Reason (optional):'):'';
+  google.script.run.withSuccessHandler(function(r){
+    alert(r.success?'✅ '+r.message:'❌ '+r.message);
+    if(r.success) loadLeaves();
+  }).Server_adminLeaveAction(id,status,note||'');
+}
+
+// ── PUNCH LOGS ─────────────────────────────────────────────────────────────
+var _logsShowAll=false;
+
+function toggleLogsScope(){
+  _logsShowAll=!_logsShowAll;
+  document.getElementById('logsToggle').textContent=_logsShowAll?'Show Today Only':'Show All';
+  document.getElementById('logsTitle').textContent=_logsShowAll?'All Logs (last 300)':"Today's Logs";
+  loadLogs();
+}
+
+// Resolves a punch log's location to a human-readable name.
+// New records: use stored locationName / locationType.
+// Old records (no locationType): match GPS coords against known locations,
+// fall back to showing the raw coordinates.
+function resolveLogLocation(l){
+  if(l.locationName) return l.locationName;
+  if(l.locationType){
+    var lm={HEAD_OFFICE:'Head Office',WORKSHOP:'Workshop',WFH:'Work From Home',OTHER:'Other'};
+    return lm[l.locationType]||l.locationType;
+  }
+  // Legacy fallback: try to match GPS against loaded locations
+  var lat=parseFloat(l.latitude), lon=parseFloat(l.longitude);
+  if(lat&&lon){
+    for(var i=0;i<_locs.length;i++){
+      var lc=_locs[i];
+      var dLat=lat-lc.latitude, dLon=lon-lc.longitude;
+      var approxM=Math.sqrt(dLat*dLat+dLon*dLon)*111000;
+      if(approxM<=(lc.radius||100)) return lc.location_name;
+    }
+    return lat.toFixed(4)+', '+lon.toFixed(4);
+  }
+  return '—';
+}
+
+function loadLogs(){
+  document.getElementById('logsTbody').innerHTML='<tr><td colspan="5" class="empty">Loading...</td></tr>';
+  // Index by both "0878" and "878" so numeric punch-log IDs match string employee IDs
+  var nameById={};
+  _emps.forEach(function(e){
+    var id=String(e.emp_id);
+    nameById[id]=e.name;
+    var num=parseInt(id,10);
+    if(!isNaN(num)) nameById[String(num)]=e.name;
+  });
+  var handler=function(r){
+    if(!r.success||!r.data.length){
+      document.getElementById('logsTbody').innerHTML='<tr><td colspan="5" class="empty">No logs.</td></tr>';return;}
+    document.getElementById('logsTbody').innerHTML=r.data.slice(0,300).map(function(l,i){
+      var ab=l.action==='IN'?'<span class="badge b-leave">IN</span>':'<span class="badge b-halfday">OUT</span>';
+      var empId=String(l.emp_id);
+      var fullName=nameById[empId]||nameById[String(parseInt(empId,10))]||l.name||empId;
+      return'<tr><td>'+(i+1)+'</td><td><b>'+fullName+'</b></td><td>'+ab+'</td>'+
+        '<td>'+l.datetime+'</td><td>'+resolveLogLocation(l)+'</td></tr>';
+    }).join('');
+  };
+  if(_logsShowAll){
+    google.script.run.withSuccessHandler(handler).Server_getAllPunchLogs();
+  } else {
+    google.script.run.withSuccessHandler(handler).Server_getTodayPunchLogs();
+  }
+}
+
+// ── EMPLOYEES ──────────────────────────────────────────────────────────────
+function loadEmployees(){
+  document.getElementById('empTbody').innerHTML='<tr><td colspan="8" class="empty">Loading...</td></tr>';
+  google.script.run.withSuccessHandler(function(r){
+    _emps=r.data||[];
+    if(!r.data||!r.data.length){
+      document.getElementById('empTbody').innerHTML='<tr><td colspan="8" class="empty">No employees yet.</td></tr>';return;}
+    document.getElementById('empTbody').innerHTML=r.data.map(function(e){
+      var sb=e.status==='Active'?'b-active':'b-inactive';
+      var tb=e.employee_type==='Probation'?'b-prob':'b-fixed';
+      return'<tr><td><b>'+e.emp_id+'</b></td><td>'+e.name+'</td>'+
+        '<td style="font-size:11px">'+e.email+'</td>'+
+        '<td><span class="badge '+tb+'">'+e.employee_type+'</span></td>'+
+        '<td>'+(e.assigned_location_id?'<code style="font-size:11px">'+e.assigned_location_id+'</code>':'<span style="color:var(--muted)">—</span>')+'</td>'+
+        '<td>'+e.shift_start_time+'</td>'+
+        '<td><span class="badge '+sb+'">'+e.status+'</span></td>'+
+        '<td><button class="btn-sm bb" onclick="openEdit(\''+e.emp_id+'\')">Edit</button></td></tr>';
+    }).join('');
+  }).Server_getAllEmployees();
+}
+
+function openEdit(empId){
+  _editId=empId; var emp=getEmp(empId); if(!emp)return;
+  document.getElementById('modal_eid').textContent=empId+' — '+emp.name;
+  document.getElementById('modal_type').value=emp.employee_type;
+  document.getElementById('modal_st').value=emp.status;
+  document.getElementById('modal_loc').value=emp.assigned_location_id;
+  document.getElementById('editModal').style.display='flex';
+}
+function closeEdit(){document.getElementById('editModal').style.display='none';}
+function saveEdit(){
+  var updates={employee_type:v('modal_type'),assigned_location_id:v('modal_loc'),status:v('modal_st')};
+  google.script.run.withSuccessHandler(function(r){
+    closeEdit(); alert(r.success?'✅ '+r.message:'❌ '+r.message);
+    if(r.success)loadEmployees();
+  }).Server_updateEmployee(_editId,updates);
+}
+
+// ── ADD EMPLOYEE ──────────────────────────────────────────────────────────
+function addEmployee(){
+  var d={emp_id:v('f_id'),name:v('f_name'),email:v('f_email'),employee_type:v('f_type'),
+    assigned_location_id:v('f_loc'),shift_start_time:v('f_shift'),status:v('f_status')};
+  if(!d.emp_id||!d.name||!d.email){
+    showAlert('empAlert','error','Fill all required fields (ID, Name, Email).');return;}
+  google.script.run.withSuccessHandler(function(r){
+    showAlert('empAlert',r.success?'success':'error',r.message);
+    if(r.success){['f_id','f_name','f_email'].forEach(function(i){document.getElementById(i).value='';});loadDropdowns();}
+  }).Server_addEmployee(d);
+}
+
+// ── ADD LOCATION ──────────────────────────────────────────────────────────
+function addLocation(){
+  var d={location_id:v('l_id'),location_name:v('l_name'),latitude:v('l_lat'),longitude:v('l_lon'),radius:v('l_rad')||100};
+  if(!d.location_id||!d.location_name||!d.latitude||!d.longitude){showAlert('locAlert','error','Fill all required fields.');return;}
+  google.script.run.withSuccessHandler(function(r){
+    showAlert('locAlert',r.success?'success':'error',r.message);
+    if(r.success){['l_id','l_name','l_lat','l_lon'].forEach(function(i){document.getElementById(i).value='';});loadDropdowns();}
+  }).Server_addLocation(d);
+}
+
+// ── HOLIDAYS ──────────────────────────────────────────────────────────────
+function loadHolidays(){
+  document.getElementById('holTbody').innerHTML='<tr><td colspan="4" class="empty">Loading...</td></tr>';
+  google.script.run.withSuccessHandler(function(r){
+    if(!r.success||!r.data.length){
+      document.getElementById('holTbody').innerHTML='<tr><td colspan="4" class="empty">No holidays added yet.</td></tr>';return;}
+    // Sort by date
+    var sorted=r.data.sort(function(a,b){return a.date<b.date?-1:1;});
+    document.getElementById('holTbody').innerHTML=sorted.map(function(h){
+      var day=DAYS[new Date(h.date+'T00:00:00').getDay()]||'';
+      return'<tr><td>'+h.date+'</td><td style="color:var(--muted)">'+day+'</td>'+
+        '<td><b>'+h.holiday_name+'</b></td>'+
+        '<td><button class="btn-sm br" onclick="deleteHoliday(\''+h.date+'\',\''+h.holiday_name+'\')">Delete</button></td></tr>';
+    }).join('');
+  }).Server_getHolidayList();
+}
+
+function addHoliday(){
+  var date=v('h_date'), name=v('h_name');
+  if(!date||!name){showAlert('holAlert','error','Both date and holiday name are required.');return;}
+  google.script.run.withSuccessHandler(function(r){
+    showAlert('holAlert',r.success?'success':'error',r.message);
+    if(r.success){document.getElementById('h_date').value='';document.getElementById('h_name').value='';loadHolidays();}
+  }).Server_addHoliday(date,name);
+}
+
+function deleteHoliday(date, name){
+  if(!confirm('Delete holiday "'+name+'" on '+date+'?'))return;
+  google.script.run.withSuccessHandler(function(r){
+    alert(r.success?'✅ '+r.message:'❌ '+r.message);
+    if(r.success)loadHolidays();
+  }).Server_deleteHoliday(date);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function v(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+function getEmp(id){for(var i=0;i<_emps.length;i++){if(_emps[i].emp_id===id)return _emps[i];}return null;}
+function fmtD(s){try{return s?new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):s;}catch(e){return s;}}
+function statusBadge(s){
+  if(!s)return'b-off';
+  if(s==='Present')return'b-present';
+  if(s==='Absent')return'b-absent';
+  if(s==='Unpaid Absent')return'b-unpaid';
+  if(s==='Half Day')return'b-halfday';
+  if(s==='Working Sunday')return'b-sunday';
+  if(s==='Working Holiday')return'b-sunday';
+  if(s==='Punch In Only')return'b-late';
+  if(s==='Holiday')return'b-holiday';
+  return'b-off';
+}
+function showAlert(id,type,msg){
+  var el=document.getElementById(id);
+  el.className='alert '+type; el.textContent=msg;
+  setTimeout(function(){el.style.display='none';},6000);
+}
+
+function calcPoints(daily, monthStr){
+  var parts=monthStr.split('-');
+  var total=new Date(parseInt(parts[0]),parseInt(parts[1]),0).getDate();
+  var deductions=0;
+  daily.forEach(function(d){
+    if(d.status==='Unpaid Absent') deductions+=1;
+    else if(d.status==='Half Day' && !(parseFloat(d.leave_credit_used)>0)) deductions+=0.5;
+  });
+  return {total:total, deductions:deductions, earned:total-deductions};
+}
+</script>
+</body>
+</html>
