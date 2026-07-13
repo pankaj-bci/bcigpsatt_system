@@ -40,6 +40,9 @@ yarn-error.log*
 # claude code local settings, incl. plan.md (the migration plan — local-only by choice, not tracked in git)
 .claude/
 
+# real employee/staff data (names, personal emails) — local-only, never committed
+/supabase/seed/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
