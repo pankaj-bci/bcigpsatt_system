@@ -3,15 +3,17 @@
 GPS attendance system for BCI — migrated from Google Sheets + Apps Script to
 Supabase (Postgres + Auth + Storage) + Next.js on Vercel.
 
-See **`docs/plan.md`** for the full migration plan (problem statement, target
-architecture, business-logic spec, phased execution plan). That document is
-the source of truth; this README is just a quick orientation.
+The full migration plan (problem statement, target architecture, business-logic
+spec, phased execution plan) lives in **`.claude/plan.md`** on the machine this
+was authored on. That file is git-ignored (local-only, not in this repo) — if
+you're reading this from a fresh clone, that document does not exist for you;
+ask the repo owner for a copy.
 
 ## Repo layout
 
 ```
 /legacy-apps-script   old Google Apps Script source (reference only, for parity testing)
-/docs/plan.md         the migration plan
+/.claude/plan.md      the migration plan (local-only, git-ignored — not in this repo)
 /src/app              Next.js App Router pages (staff + admin)
 /lib/supabase         Supabase client helpers
 /lib/geo              haversine / geofence utilities

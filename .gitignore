@@ -37,7 +37,7 @@ yarn-error.log*
 # vercel
 .vercel
 
-# claude code local settings (project's real docs live in /docs)
+# claude code local settings, incl. plan.md (the migration plan — local-only by choice, not tracked in git)
 .claude/
 
 # typescript
