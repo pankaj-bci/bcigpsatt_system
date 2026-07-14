@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f4f4f5;
   --foreground: #171717;
 }
 
@@ -12,13 +12,8 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* BCI brand is a fixed white/blue theme (not adaptive) -- deliberately no
+   prefers-color-scheme: dark override here. */
 body {
   background: var(--background);
   color: var(--foreground);

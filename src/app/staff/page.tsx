@@ -1,36 +1,28 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { LogoutButton } from "@/app/logout-button";
+import { PunchClient } from "./punch-client";
 
-export default async function StaffPage() {
+export const dynamic = "force-dynamic";
+
+export default async function StaffPunchPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const { data: employee } = await supabase
-    .from("employees")
-    .select("name, status")
-    .maybeSingle();
-
-  if (!employee || employee.status !== "Active") redirect("/access-denied");
+  const [{ data: employee }, { data: locations }, { data: punches }] = await Promise.all([
+    supabase.from("employees").select("name, email, employee_type").maybeSingle(),
+    supabase.from("locations").select("location_id, location_name").order("location_id"),
+    supabase
+      .from("punch_logs")
+      .select("action, punched_at")
+      .order("punched_at", { ascending: false })
+      .limit(1),
+  ]);
 
   return (
-    <main className="flex min-h-full flex-1 flex-col bg-zinc-950 px-4 py-8 text-zinc-50">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">GPS Attendance</h1>
-            <p className="text-sm text-zinc-400">Welcome, {employee.name}</p>
-          </div>
-          <LogoutButton />
-        </header>
-        <p className="mt-8 text-zinc-400">
-          Punch / dashboard / leave placeholder — built out in Phase 4.
-        </p>
-      </div>
-    </main>
+    <PunchClient
+      employeeName={employee?.name ?? ""}
+      employeeEmail={employee?.email ?? ""}
+      employeeType={employee?.employee_type ?? ""}
+      locations={locations ?? []}
+      initialLastPunch={punches?.[0] ?? null}
+    />
   );
 }
