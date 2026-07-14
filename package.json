@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:parity": "node tests/parity/run.mjs",
-    "test:load": "node tests/load/run.mjs"
+    "test:load": "node tests/load/run.mjs",
+    "test:dashboard-latency": "node tests/dashboard-latency/run.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
