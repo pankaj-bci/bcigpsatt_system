@@ -88,12 +88,16 @@ export async function getTodayDashboard(): Promise<TodayDashboard> {
     add("total_staff", emp.name);
 
     const leaveStatus = onLeaveByEmp.get(emp.emp_id);
-    if (leaveStatus) {
+    const firstIn = firstInByEmp.get(emp.emp_id);
+
+    // Approved leave always wins. A Pending request only wins if the
+    // employee hasn't actually punched in today -- a physical punch beats
+    // an as-yet-undecided request.
+    if (leaveStatus === "Approved" || (leaveStatus === "Pending" && !firstIn)) {
       add("on_leave", emp.name + (leaveStatus === "Pending" ? " (Pending)" : ""));
       continue;
     }
 
-    const firstIn = firstInByEmp.get(emp.emp_id);
     if (firstIn) {
       add("present", emp.name);
 
