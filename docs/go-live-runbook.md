@@ -17,6 +17,22 @@ full decision history — this file is the actionable checklist version).
       `supabase/migrations/20260715010000_indexes.sql` in the Supabase
       SQL Editor (no `DATABASE_URL` in this repo, so every migration goes
       in by hand — same as all prior ones).
+- [ ] **v2 migrations applied (device binding + mark-late)** — run, in
+      order, `supabase/migrations/20260719000000_device_binding.sql` then
+      `20260719010000_manual_late.sql` in the SQL Editor, BEFORE deploying
+      the matching frontend. Both are deploy-safe with the old frontend
+      (`device_enforcement` starts `'off'`; new params all default).
+      Afterwards run `npm run test:parity` — all sections including the
+      new `D:` and `ML:` ones must pass.
+- [ ] **Device enforcement flipped ON** — after every active employee has
+      punched at least once with the new frontend (each first punch
+      auto-binds their phone), check for unbound staff:
+      `select e.emp_id, e.name from employees e left join employee_devices d using (emp_id) where e.status = 'Active' and d.emp_id is null;`
+      When that returns zero rows (recommended: evening of go-live day),
+      flip the gate:
+      `update app_config set value = 'on' where key = 'device_enforcement';`
+      Until this is on, punches sent without a device id (old clients,
+      hand-crafted calls) are still accepted.
 - [ ] **Supabase project not paused** — Free tier auto-pauses a project
       after 7 days with zero activity. Log in / hit the app once in the
       days right before 2026-08-01 to be sure it's warm, since a paused

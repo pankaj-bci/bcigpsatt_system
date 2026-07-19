@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { getTodayDashboard, type TodayDashboard } from "./today-data";
+import { MarkLateRow } from "./mark-late-row";
 
 const TILE_META: {
   key: keyof TodayDashboard["tiles"];
@@ -13,7 +14,7 @@ const TILE_META: {
   { key: "present", label: "Present", sub: "punched in", color: "text-green-600" },
   { key: "yet_to_punch", label: "Yet to Punch", sub: "before grace", color: "text-zinc-500" },
   { key: "absent", label: "Absent", sub: "past grace, no punch", color: "text-red-600" },
-  { key: "late", label: "Late", sub: "in after 9:36", color: "text-amber-600" },
+  { key: "late", label: "Late", sub: "after 9:36 or marked", color: "text-amber-600" },
   { key: "on_leave", label: "On Leave", sub: "approved/pending", color: "text-purple-600" },
   { key: "in_office", label: "In Office", sub: "head office", color: "text-blue-600" },
   { key: "in_workshop", label: "In Workshop", sub: "workshop location", color: "text-blue-600" },
@@ -24,6 +25,7 @@ const TILE_META: {
 export function TodayDashboardClient({ initialData }: { initialData: TodayDashboard }) {
   const [data, setData] = useState(initialData);
   const [expanded, setExpanded] = useState<keyof TodayDashboard["tiles"] | null>(null);
+  const [venue, setVenue] = useState("All");
   const [isPending, startTransition] = useTransition();
 
   function refresh() {
@@ -49,14 +51,28 @@ export function TodayDashboardClient({ initialData }: { initialData: TodayDashbo
             Live snapshot of punches, leave, and location. As of {data.asOf}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={isPending}
-          className="h-9 rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-        >
-          {isPending ? "Refreshing…" : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={venue}
+            onChange={(e) => setVenue(e.target.value)}
+            className="h-9 rounded-lg border border-zinc-300 px-2 text-sm text-zinc-700 focus:border-blue-600 focus:outline-none"
+          >
+            <option value="All">All venues</option>
+            {data.venueOptions.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={isPending}
+            className="h-9 rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+          >
+            {isPending ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
       <p className="text-xs text-zinc-400">Auto-refreshes every 5 min.</p>
 
@@ -86,22 +102,33 @@ export function TodayDashboardClient({ initialData }: { initialData: TodayDashbo
         })}
       </div>
 
-      {expanded && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <p className="mb-2 text-sm font-semibold text-zinc-900">
-            {TILE_META.find((t) => t.key === expanded)?.label} ({data.tiles[expanded].count})
-          </p>
-          {data.tiles[expanded].names.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nobody in this bucket.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-700">
-              {data.tiles[expanded].names.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {expanded && (() => {
+        const all = data.tiles[expanded].members;
+        const shown = venue === "All" ? all : all.filter((m) => m.venue === venue);
+        return (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <p className="mb-2 text-sm font-semibold text-zinc-900">
+              {TILE_META.find((t) => t.key === expanded)?.label} ({data.tiles[expanded].count})
+              {venue !== "All" && (
+                <span className="ml-2 font-normal text-zinc-500">
+                  showing {shown.length} of {all.length} for {venue}
+                </span>
+              )}
+            </p>
+            {shown.length === 0 ? (
+              <p className="text-sm text-zinc-500">
+                {venue === "All" ? "Nobody in this bucket." : `Nobody in this bucket punched at ${venue}.`}
+              </p>
+            ) : (
+              <ul className="divide-y divide-blue-100">
+                {shown.map((member) => (
+                  <MarkLateRow key={member.empId} member={member} date={data.date} onDone={refresh} />
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

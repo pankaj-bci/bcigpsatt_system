@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 export default async function AdminEmployeesPage() {
   const supabase = await createClient();
 
-  const [{ data: employees }, { data: locations }] = await Promise.all([
+  const [{ data: employees }, { data: locations }, { data: devices }] = await Promise.all([
     supabase
       .from("employees")
       .select("emp_id, name, email, employee_type, assigned_location_id, status")
       .order("emp_id"),
     supabase.from("locations").select("location_id, location_name").order("location_id"),
+    supabase.from("employee_devices").select("emp_id, bound_at, last_seen_at, user_agent, label"),
   ]);
+
+  const deviceByEmp = new Map((devices ?? []).map((d) => [d.emp_id, d]));
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,7 +35,12 @@ export default async function AdminEmployeesPage() {
 
       <div className="flex flex-col gap-2">
         {(employees ?? []).map((emp) => (
-          <EmployeeRow key={emp.emp_id} employee={emp} locations={locations ?? []} />
+          <EmployeeRow
+            key={emp.emp_id}
+            employee={emp}
+            locations={locations ?? []}
+            device={deviceByEmp.get(emp.emp_id) ?? null}
+          />
         ))}
         {(employees ?? []).length === 0 && (
           <p className="text-sm text-zinc-500">No employees yet.</p>

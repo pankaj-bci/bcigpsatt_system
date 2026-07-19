@@ -1,6 +1,6 @@
 // Phase 5, Task 3: admin Today dashboard latency -- O1's other half
 // (dashboard API p95 < 400ms, .claude/plan.md Section 4). Replicates the
-// exact 4-query Promise.all from src/app/admin/today-data.ts's
+// exact 6-query Promise.all from src/app/admin/today-data.ts's
 // getTodayDashboard() against a signed-in temp admin, run N times
 // sequentially (this is a single admin loading/refreshing the page, not a
 // concurrency test -- that's tests/load/run.mjs's job).
@@ -74,8 +74,10 @@ async function measureOnce(user, today) {
   await Promise.all([
     user.from('holidays').select('holiday_name').eq('date', today).maybeSingle(),
     user.from('employees').select('emp_id, name').eq('status', 'Active').order('name'),
-    user.from('punch_logs').select('emp_id, punched_at, location_type').eq('action', 'IN').gte('punched_at', dayStartUtc).lt('punched_at', dayEndUtc),
+    user.from('punch_logs').select('emp_id, punched_at, location_type, location_name').eq('action', 'IN').gte('punched_at', dayStartUtc).lt('punched_at', dayEndUtc),
     user.from('leave_requests').select('emp_id, status').in('status', ['Approved', 'Pending']).lte('leave_from', today).gte('leave_to', today),
+    user.from('locations').select('location_name').order('location_id'),
+    user.from('attendance_summary').select('emp_id, manual_late, manual_late_note').eq('date', today),
   ]);
   return Date.now() - start;
 }

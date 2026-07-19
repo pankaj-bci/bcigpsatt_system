@@ -61,7 +61,7 @@ export default async function StaffDashboardPage({
   const [{ data: daily }, { data: extra }] = await Promise.all([
     supabase
       .from("attendance_summary")
-      .select("date, status, in_time, out_time, late_flag, early_flag, half_day_flag, notes")
+      .select("date, status, in_time, out_time, late_flag, early_flag, half_day_flag, notes, manual_late, manual_late_note")
       .eq("emp_id", employee.emp_id)
       .gte("date", monthStart)
       .lte("date", monthEnd)
@@ -107,6 +107,11 @@ export default async function StaffDashboardPage({
                 {(d.in_time || d.out_time) && (
                   <p className="text-xs text-zinc-500">
                     {d.in_time?.slice(0, 5) ?? "—"} → {d.out_time?.slice(0, 5) ?? "—"}
+                  </p>
+                )}
+                {d.manual_late && (
+                  <p className="mt-0.5 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    Marked late by admin{d.manual_late_note ? ` — ${d.manual_late_note}` : ""}
                   </p>
                 )}
               </div>

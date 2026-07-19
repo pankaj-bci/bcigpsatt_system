@@ -11,6 +11,26 @@ const SPECIAL_TILES = [
   { location_id: "OTHER", location_name: "Other / Field Visit", icon: "🌍", note: "Valid if >2 km from office" },
 ];
 
+// Stable per-device id for the 1:1 device binding in record_punch().
+// localStorage is the primary store, a long-lived cookie the fallback; each
+// backfills the other so clearing one doesn't orphan the binding. If both
+// stores are blocked (rare), the per-load id will read as a new device and
+// the server's message tells the employee to contact admin.
+function getDeviceId(): string {
+  try {
+    let id =
+      localStorage.getItem("bci_device_id") ??
+      document.cookie.match(/(?:^|;\s*)bci_device_id=([0-9a-f-]{36})/)?.[1] ??
+      null;
+    if (!id) id = crypto.randomUUID();
+    localStorage.setItem("bci_device_id", id);
+    document.cookie = `bci_device_id=${id}; max-age=63072000; path=/; SameSite=Lax`;
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 function formatClock(d: Date) {
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
@@ -78,6 +98,8 @@ export function PunchClient({
       p_lat: position.coords.latitude,
       p_lon: position.coords.longitude,
       p_accuracy: position.coords.accuracy,
+      p_device_id: getDeviceId(),
+      p_user_agent: navigator.userAgent.slice(0, 256),
     });
 
     setPendingAction(null);

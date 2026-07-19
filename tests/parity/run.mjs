@@ -51,42 +51,74 @@ function check(section, name, cond, extra) {
 
 const EMP_ID = 'T999';
 const EMAIL = 'parity.harness.t999@example.com';
+const EMP2_ID = 'T998';
+const EMAIL2 = 'parity.harness.t998@example.com';
+const ADMIN_EMAIL = 'parity.harness.admin@example.com';
 const PASSWORD = 'Test-Parity-Harness-Pw-0021!';
 const ZLOC = 'ZTEST';
 let authUserId = null;
-let user; // signed-in client, used for every RPC call below
+let authUserId2 = null;
+let adminAuthUserId = null;
+let user; // signed-in client (T999), used for most RPC calls below
+let user2; // signed-in client (T998), for cross-employee device tests
+let adminUser; // signed-in client whose email is in `admins`, for admin_mark_late
+let originalEnforcement = 'off'; // app_config value to restore in cleanup
+
+async function makeAuthUser(email) {
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email, password: PASSWORD, email_confirm: true,
+  });
+  if (error) throw new Error(`setup: auth user create failed for ${email}: ` + error.message);
+  const client = createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { error: signInErr } = await client.auth.signInWithPassword({ email, password: PASSWORD });
+  if (signInErr) throw new Error(`setup: sign-in failed for ${email}: ` + signInErr.message);
+  return { id: created.user.id, client };
+}
 
 async function setup() {
-  await admin.from('attendance_summary').delete().eq('emp_id', EMP_ID);
-  await admin.from('punch_logs').delete().eq('emp_id', EMP_ID);
-  await admin.from('monthly_summary').delete().eq('emp_id', EMP_ID);
-  await admin.from('employees').delete().eq('emp_id', EMP_ID);
+  for (const id of [EMP_ID, EMP2_ID]) {
+    await admin.from('attendance_summary').delete().eq('emp_id', id);
+    await admin.from('punch_logs').delete().eq('emp_id', id);
+    await admin.from('monthly_summary').delete().eq('emp_id', id);
+    await admin.from('employee_devices').delete().eq('emp_id', id);
+    await admin.from('employees').delete().eq('emp_id', id);
+  }
   await admin.from('locations').delete().eq('location_id', ZLOC);
+  await admin.from('admins').delete().eq('email', ADMIN_EMAIL);
 
-  const { error: empErr } = await admin.from('employees').insert({
-    emp_id: EMP_ID, name: 'Parity Harness', email: EMAIL,
-    employee_type: 'Fixed', assigned_location_id: 'L1', status: 'Active',
-  });
+  const { error: empErr } = await admin.from('employees').insert([
+    { emp_id: EMP_ID, name: 'Parity Harness', email: EMAIL,
+      employee_type: 'Fixed', assigned_location_id: 'L1', status: 'Active' },
+    { emp_id: EMP2_ID, name: 'Parity Harness 2', email: EMAIL2,
+      employee_type: 'Fixed', assigned_location_id: 'L1', status: 'Active' },
+  ]);
   if (empErr) throw new Error('setup: employee insert failed: ' + empErr.message);
 
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email: EMAIL, password: PASSWORD, email_confirm: true,
-  });
-  if (createErr) throw new Error('setup: auth user create failed: ' + createErr.message);
-  authUserId = created.user.id;
+  const { error: admErr } = await admin.from('admins').insert({ email: ADMIN_EMAIL });
+  if (admErr) throw new Error('setup: admins insert failed: ' + admErr.message);
 
-  user = createClient(URL, ANON, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { error: signInErr } = await user.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
-  if (signInErr) throw new Error('setup: sign-in failed: ' + signInErr.message);
+  ({ id: authUserId, client: user } = await makeAuthUser(EMAIL));
+  ({ id: authUserId2, client: user2 } = await makeAuthUser(EMAIL2));
+  ({ id: adminAuthUserId, client: adminUser } = await makeAuthUser(ADMIN_EMAIL));
+
+  const { data: cfg } = await admin.from('app_config').select('value').eq('key', 'device_enforcement').maybeSingle();
+  originalEnforcement = cfg?.value ?? 'off';
 }
 
 async function cleanup() {
-  await admin.from('attendance_summary').delete().eq('emp_id', EMP_ID);
-  await admin.from('punch_logs').delete().eq('emp_id', EMP_ID);
-  await admin.from('monthly_summary').delete().eq('emp_id', EMP_ID);
-  await admin.from('employees').delete().eq('emp_id', EMP_ID);
+  for (const id of [EMP_ID, EMP2_ID]) {
+    await admin.from('attendance_summary').delete().eq('emp_id', id);
+    await admin.from('punch_logs').delete().eq('emp_id', id);
+    await admin.from('monthly_summary').delete().eq('emp_id', id);
+    await admin.from('employee_devices').delete().eq('emp_id', id);
+    await admin.from('employees').delete().eq('emp_id', id);
+  }
   await admin.from('locations').delete().eq('location_id', ZLOC);
+  await admin.from('admins').delete().eq('email', ADMIN_EMAIL);
+  await admin.from('app_config').update({ value: originalEnforcement }).eq('key', 'device_enforcement');
   if (authUserId) await admin.auth.admin.deleteUser(authUserId);
+  if (authUserId2) await admin.auth.admin.deleteUser(authUserId2);
+  if (adminAuthUserId) await admin.auth.admin.deleteUser(adminAuthUserId);
 }
 
 // ---------------------------------------------------------------------
@@ -299,6 +331,208 @@ async function testC8() {
   check(s, 'null selected tile falls back to assigned_location_id (L1), succeeds when physically at L1', !e2 && r2?.valid === true, { r2, e2 });
 }
 
+// ---------------------------------------------------------------------
+// v2 Feature A -- strict 1:1 device binding in record_punch
+// ---------------------------------------------------------------------
+const ZLAT = 12.9716, ZLON = 77.5946;
+const DEV1 = 'aaaaaaaa-0000-4000-8000-000000000001';
+const DEV2 = 'aaaaaaaa-0000-4000-8000-000000000002';
+
+async function punch(client, action, deviceId) {
+  const args = { p_action: action, p_location_id: ZLOC, p_lat: ZLAT, p_lon: ZLON, p_accuracy: 50 };
+  if (deviceId !== undefined) {
+    args.p_device_id = deviceId;
+    args.p_user_agent = 'parity-harness';
+  }
+  const { data, error } = await client.rpc('record_punch', args);
+  return { r: Array.isArray(data) ? data[0] : data, error };
+}
+
+// Resets the 2-min cooldown / IN-OUT sequence between punch tests without
+// touching the device binding itself.
+async function clearPunchState(empId) {
+  await admin.from('punch_logs').delete().eq('emp_id', empId);
+  await admin.from('attendance_summary').delete().eq('emp_id', empId);
+}
+
+async function setEnforcement(value) {
+  const { error } = await admin.from('app_config').update({ value }).eq('key', 'device_enforcement');
+  if (error) throw new Error('setEnforcement failed: ' + error.message);
+}
+
+async function testDeviceBinding() {
+  const s = 'D: device binding';
+  await admin.from('locations').delete().eq('location_id', ZLOC);
+  await admin.from('locations').insert({ location_id: ZLOC, location_name: 'Z Test Site', latitude: ZLAT, longitude: ZLON, radius: 100 });
+  await clearPunchState(EMP_ID);
+  await clearPunchState(EMP2_ID);
+  await setEnforcement('off');
+
+  // Deploy safety: old clients (no p_device_id) keep punching while 'off'.
+  const d1 = await punch(user, 'IN');
+  check(s, "enforcement off + no device id -> punch succeeds (old clients unaffected)", !d1.error && d1.r?.success === true, d1);
+  const { data: noBind } = await admin.from('employee_devices').select('emp_id').eq('emp_id', EMP_ID);
+  check(s, 'no binding row created for device-less punch', (noBind ?? []).length === 0, { noBind });
+  await clearPunchState(EMP_ID);
+
+  // First punch with a device id auto-binds and logs the id per punch.
+  const d2 = await punch(user, 'IN', DEV1);
+  check(s, 'first punch with device id succeeds and auto-binds', !d2.error && d2.r?.success === true, d2);
+  const { data: bind } = await admin.from('employee_devices').select('device_id').eq('emp_id', EMP_ID).maybeSingle();
+  check(s, 'binding row holds DEV1', bind?.device_id === DEV1, { bind });
+  const { data: logRow } = await admin.from('punch_logs').select('device_id').eq('emp_id', EMP_ID).order('log_id', { ascending: false }).limit(1).maybeSingle();
+  check(s, 'punch_logs row records device_id (forensic trail)', logRow?.device_id === DEV1, { logRow });
+  await clearPunchState(EMP_ID);
+
+  // Same employee from a different device -> rejected, binding unchanged.
+  const d3 = await punch(user, 'IN', DEV2);
+  check(s, 'same employee, different device -> rejected', !d3.error && d3.r?.success === false && /different phone/i.test(d3.r?.message ?? ''), d3);
+  const { data: bindAfter } = await admin.from('employee_devices').select('device_id').eq('emp_id', EMP_ID).maybeSingle();
+  check(s, 'binding still DEV1 after rejected punch', bindAfter?.device_id === DEV1, { bindAfter });
+
+  // Another employee on the SAME phone -> rejected (the buddy-punch case).
+  const d4 = await punch(user2, 'IN', DEV1);
+  check(s, "other employee using T999's phone -> rejected", !d4.error && d4.r?.success === false && /already registered/i.test(d4.r?.message ?? ''), d4);
+
+  // Enforcement on: device-less punches stop working; the bound device still punches.
+  await setEnforcement('on');
+  const d5 = await punch(user, 'IN');
+  check(s, 'enforcement on + no device id -> rejected', !d5.error && d5.r?.success === false && /refresh/i.test(d5.r?.message ?? ''), d5);
+  const d6 = await punch(user, 'IN', DEV1);
+  check(s, 'enforcement on + bound device -> succeeds', !d6.error && d6.r?.success === true, d6);
+  await clearPunchState(EMP_ID);
+  await setEnforcement('off');
+
+  // Admin reset: delete the binding; next punch (new phone) auto-rebinds.
+  await admin.from('employee_devices').delete().eq('emp_id', EMP_ID);
+  const d7 = await punch(user, 'IN', DEV2);
+  check(s, 'after admin reset, punch from new device succeeds and rebinds', !d7.error && d7.r?.success === true, d7);
+  const { data: rebind } = await admin.from('employee_devices').select('device_id').eq('emp_id', EMP_ID).maybeSingle();
+  check(s, 'binding now DEV2', rebind?.device_id === DEV2, { rebind });
+  await clearPunchState(EMP_ID);
+  await admin.from('employee_devices').delete().eq('emp_id', EMP_ID);
+}
+
+// ---------------------------------------------------------------------
+// v2 Feature B -- admin_mark_late with full policy consequences
+// ---------------------------------------------------------------------
+async function markLate(empId, date, late, note) {
+  const { data, error } = await adminUser.rpc('admin_mark_late', {
+    p_emp_id: empId, p_date: date, p_late: late, p_note: note ?? null,
+  });
+  return { r: Array.isArray(data) ? data[0] : data, error };
+}
+
+async function getDay(date) {
+  const { data } = await admin.from('attendance_summary').select('*').eq('emp_id', EMP_ID).eq('date', date).maybeSingle();
+  return data;
+}
+
+async function testManualLateCore() {
+  const s = 'ML: mark/unmark core';
+  await clearPunchState(EMP_ID);
+  await admin.from('monthly_summary').delete().eq('emp_id', EMP_ID);
+
+  // One on-time day (same seeded-punch pattern as C-6/C-7), backfilled.
+  await admin.from('punch_logs').insert([
+    { emp_id: EMP_ID, action: 'IN', punched_at: '2026-07-01T09:30:00+05:30' },
+    { emp_id: EMP_ID, action: 'OUT', punched_at: '2026-07-01T18:30:00+05:30' },
+  ]);
+  await user.rpc('backfill_missing_days', { p_emp_id: EMP_ID, p_month: '2026-07-01' });
+  let day = await getDay('2026-07-01');
+  check(s, 'baseline: on-time day evaluates Present, not late', day?.status === 'Present' && day?.late_flag === false, { day });
+
+  const m1 = await markLate(EMP_ID, '2026-07-01', true, 'Workshop was 8 AM');
+  check(s, 'mark late succeeds', !m1.error && m1.r?.success === true, m1);
+  day = await getDay('2026-07-01');
+  check(s, 'late_flag set, status still Present (1st late of month)', day?.late_flag === true && day?.status === 'Present', { day });
+  check(s, 'manual columns recorded (flag, note, by-admin-email, timestamp)',
+    day?.manual_late === true && day?.manual_late_note === 'Workshop was 8 AM' && day?.manual_late_by === ADMIN_EMAIL && !!day?.manual_late_at, { day });
+  check(s, 'engine notes mention the admin mark', /marked late by admin/i.test(day?.notes ?? ''), { notes: day?.notes });
+
+  // Note is optional: marking with no note must also work (one-tap flow).
+  const m2 = await markLate(EMP_ID, '2026-07-01', true);
+  check(s, 're-mark with no note succeeds and clears the old note', !m2.error && m2.r?.success === true && (await getDay('2026-07-01'))?.manual_late_note === null, m2);
+
+  const m3 = await markLate(EMP_ID, '2026-07-01', false);
+  check(s, 'unmark succeeds', !m3.error && m3.r?.success === true, m3);
+  day = await getDay('2026-07-01');
+  check(s, 'unmark restores: late_flag false, Present, manual columns cleared',
+    day?.late_flag === false && day?.status === 'Present' && day?.manual_late === false && day?.manual_late_by === null && day?.manual_late_at === null, { day });
+}
+
+async function testManualLateConsequences() {
+  const s = 'ML: allowance + cascade';
+  await clearPunchState(EMP_ID);
+  await admin.from('monthly_summary').delete().eq('emp_id', EMP_ID);
+
+  // Real punches for four days: 07-01 on time; 07-02, 07-03, 07-07 late
+  // (09:40). After backfill the three system lates are incidents 1..3 --
+  // all inside the 3-free allowance, so everything is Present.
+  await admin.from('punch_logs').insert([
+    { emp_id: EMP_ID, action: 'IN', punched_at: '2026-07-01T09:30:00+05:30' },
+    { emp_id: EMP_ID, action: 'OUT', punched_at: '2026-07-01T18:30:00+05:30' },
+    { emp_id: EMP_ID, action: 'IN', punched_at: '2026-07-02T09:40:00+05:30' },
+    { emp_id: EMP_ID, action: 'OUT', punched_at: '2026-07-02T18:30:00+05:30' },
+    { emp_id: EMP_ID, action: 'IN', punched_at: '2026-07-03T09:40:00+05:30' },
+    { emp_id: EMP_ID, action: 'OUT', punched_at: '2026-07-03T18:30:00+05:30' },
+    { emp_id: EMP_ID, action: 'IN', punched_at: '2026-07-07T09:40:00+05:30' },
+    { emp_id: EMP_ID, action: 'OUT', punched_at: '2026-07-07T18:30:00+05:30' },
+  ]);
+  await user.rpc('backfill_missing_days', { p_emp_id: EMP_ID, p_month: '2026-07-01' });
+  let d7 = await getDay('2026-07-07');
+  check(s, 'baseline: 3 system lates all within allowance -> 07-07 Present', d7?.status === 'Present' && d7?.late_flag === true, { d7 });
+
+  // Retro-mark the on-time 07-01 as late. It becomes incident #1, pushing
+  // 07-07 to incident #4 -- the forward cascade must convert it to Half Day.
+  const m1 = await markLate(EMP_ID, '2026-07-01', true);
+  check(s, 'retro mark on 07-01 succeeds', !m1.error && m1.r?.success === true, m1);
+  const d1 = await getDay('2026-07-01');
+  check(s, '07-01 itself: late but Present (incident #1)', d1?.late_flag === true && d1?.status === 'Present' && d1?.manual_late === true, { d1 });
+  d7 = await getDay('2026-07-07');
+  check(s, 'cascade: 07-07 becomes the 4th incident -> Half Day, 0.5 credit',
+    d7?.status === 'Half Day' && Number(d7?.leave_credit_used) === 0.5, { d7 });
+
+  // Marking an ALREADY-late day is a no-op on counters: 07-02 was late by
+  // punch time; the mark records intent but flips nothing.
+  const m2 = await markLate(EMP_ID, '2026-07-02', true, 'also missed workshop');
+  const d2 = await getDay('2026-07-02');
+  d7 = await getDay('2026-07-07');
+  check(s, 'marking an already-late day changes nothing downstream',
+    !m2.error && m2.r?.success === true && d2?.late_flag === true && d2?.manual_late === true && d7?.status === 'Half Day', { d2, d7 });
+
+  // Unmark 07-01 -> 07-07 drops back to incident #3 -> Present again.
+  await markLate(EMP_ID, '2026-07-02', false);
+  const m3 = await markLate(EMP_ID, '2026-07-01', false);
+  d7 = await getDay('2026-07-07');
+  check(s, 'unmark reverses the cascade: 07-07 back to Present', !m3.error && m3.r?.success === true && d7?.status === 'Present', { d7 });
+}
+
+async function testManualLateGuards() {
+  const s = 'ML: guards';
+
+  const g1 = await user.rpc('admin_mark_late', { p_emp_id: EMP_ID, p_date: '2026-07-01', p_late: true, p_note: null });
+  check(s, 'non-admin caller -> permission error', !!g1.error && /admin access only/i.test(g1.error.message), g1.error?.message);
+
+  const g2 = await markLate(EMP_ID, '2026-07-18', true); // backfilled Absent row, no punch IN
+  check(s, 'day without a punch IN -> rejected', !g2.error && g2.r?.success === false && /no punch in/i.test(g2.r?.message ?? ''), g2);
+
+  const g3 = await markLate(EMP_ID, '2026-07-05', true); // a Sunday
+  check(s, 'Sunday -> rejected', !g3.error && g3.r?.success === false && /sunday/i.test(g3.r?.message ?? ''), g3);
+
+  const g4 = await markLate(EMP_ID, '2026-12-01', true);
+  check(s, 'future date -> rejected', !g4.error && g4.r?.success === false && /future/i.test(g4.r?.message ?? ''), g4);
+
+  // Holiday guard: use a temporary holiday on a date we control, unless one
+  // already exists there (then just use it as-is).
+  const HDATE = '2026-07-14';
+  const { data: existing } = await admin.from('holidays').select('date').eq('date', HDATE).maybeSingle();
+  if (!existing) await admin.from('holidays').insert({ date: HDATE, holiday_name: 'Parity Harness Holiday' });
+  const g5 = await markLate(EMP_ID, HDATE, true);
+  check(s, 'holiday -> rejected', !g5.error && g5.r?.success === false && /holiday/i.test(g5.r?.message ?? ''), g5);
+  if (!existing) await admin.from('holidays').delete().eq('date', HDATE).eq('holiday_name', 'Parity Harness Holiday');
+}
+
 async function main() {
   try {
     await setup();
@@ -313,6 +547,10 @@ async function main() {
     await testC6();
     await testC7();
     await testC8();
+    await testDeviceBinding();
+    await testManualLateCore();
+    await testManualLateConsequences();
+    await testManualLateGuards();
   } catch (e) {
     fail++;
     failures.push('(exception)');

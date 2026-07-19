@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { updateEmployee } from "./actions";
+import { resetDeviceAction, updateEmployee } from "./actions";
 
 type Employee = {
   emp_id: string;
@@ -12,13 +12,33 @@ type Employee = {
   status: string;
 };
 type Location = { location_id: string; location_name: string };
+type Device = {
+  emp_id: string;
+  bound_at: string;
+  last_seen_at: string | null;
+  user_agent: string | null;
+  label: string | null;
+} | null;
+
+function formatDay(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
 
 const inputClass =
   "h-9 rounded-lg border border-zinc-300 px-3 text-sm focus:border-blue-600 focus:outline-none";
 
-export function EmployeeRow({ employee, locations }: { employee: Employee; locations: Location[] }) {
+export function EmployeeRow({
+  employee,
+  locations,
+  device,
+}: {
+  employee: Employee;
+  locations: Location[];
+  device: Device;
+}) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(updateEmployee, undefined);
+  const [resetState, resetAction, resetPending] = useActionState(resetDeviceAction, undefined);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white">
@@ -101,6 +121,48 @@ export function EmployeeRow({ employee, locations }: { employee: Employee; locat
             {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
           </div>
         </form>
+      )}
+
+      {open && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 p-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-zinc-500">Registered device</p>
+            {device ? (
+              <p className="truncate text-sm text-zinc-700">
+                Bound {formatDay(device.bound_at)}
+                {device.last_seen_at && ` · last punch ${formatDay(device.last_seen_at)}`}
+                {(device.label || device.user_agent) &&
+                  ` · ${device.label ?? device.user_agent?.slice(0, 60)}`}
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-500">No device bound — binds on first punch.</p>
+            )}
+          </div>
+          {device && (
+            <form
+              action={resetAction}
+              onSubmit={(e) => {
+                if (
+                  !confirm(
+                    `Reset ${employee.name}'s device? Their next punch (from any phone) becomes the new registered device.`
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="emp_id" value={employee.emp_id} />
+              <button
+                type="submit"
+                disabled={resetPending}
+                className="h-9 rounded-lg border border-red-200 px-4 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {resetPending ? "Resetting…" : "Reset device"}
+              </button>
+            </form>
+          )}
+          {resetState?.error && <p className="text-sm text-red-600">{resetState.error}</p>}
+        </div>
       )}
     </div>
   );

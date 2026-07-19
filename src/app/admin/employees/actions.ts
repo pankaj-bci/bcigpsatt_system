@@ -76,3 +76,20 @@ export async function updateEmployee(
 
   revalidatePath("/admin/employees");
 }
+
+// Unbinds the employee's registered phone. Their next punch (from any phone)
+// auto-binds that device as the new one — see record_punch() device block.
+export async function resetDeviceAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const empId = String(formData.get("emp_id") ?? "").trim();
+  if (!empId) return { error: "Missing employee ID." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("employee_devices").delete().eq("emp_id", empId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/employees");
+}
